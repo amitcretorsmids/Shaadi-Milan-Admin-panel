@@ -81,7 +81,7 @@ export default function LoginPage() {
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#f5a623] to-[#e8568a] opacity-20" />
                 <div className="relative w-full h-full rounded-xl overflow-hidden bg-white/5 backdrop-blur-sm">
                   <Image
-                    src="/logo.png" // Update this path to match your logo filename
+                    src="/shaadi-milan-logo.png" // Update this path to match your logo filename
                     alt="Shaadi Milan Logo"
                     width={3258}
                     height={3258}
