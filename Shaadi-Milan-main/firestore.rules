@@ -1,0 +1,291 @@
+
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- AGENTS (PUBLIC READ) ----------
+    match /agents/{agentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+// ==========================================
+    // ADMINS COLLECTION RULES (ADD THIS SECTION)
+    // ==========================================
+    match /admins/{adminId} {
+      // Allow authenticated users to read admin data
+      allow read: if request.auth != null;
+      
+      // Only allow admins to write/update admin data
+      // You can restrict this further based on your needs
+      allow write: if request.auth != null && 
+        request.auth.uid == adminId;
+      
+      // Optional: Only super admins can delete
+      allow delete: if false;
+    }
+    
+    
+    
+    // ---------- PAYMENTS ----------
+match /payments/{paymentId} {
+
+  // ✅ Allow read if logged in
+  allow read: if request.auth != null;
+
+  // ❌ Prevent client write (recommended)
+  allow write: if false;
+}
+    
+    
+    // ---------- USERS ----------
+match /users/{userId} {
+  allow read: if true;
+  allow update: if request.auth != null;
+}
+
+  match /metrimony_profiles/{userId} {
+
+  allow read: if request.auth != null;
+
+  allow update: if request.auth != null
+    && (
+      request.auth.uid == userId
+      || request.auth.uid ==
+          get(/databases/$(database)/documents/users/$(userId))
+            .data.agentId
+    );
+
+  allow create: if request.auth != null && request.auth.uid == userId;
+
+  allow delete: if false;
+}
+
+
+    // ---------- USER STATUS ----------
+    match /userStatus/{userId} {
+
+      // ✅ Owner can read
+      allow read: if request.auth != null
+                  && request.auth.uid == userId;
+
+      // ✅ Owner can create
+      allow create: if request.auth != null
+                    && request.auth.uid == userId;
+
+      // ✅ Owner can update ONLY isProfileCreated
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.diff(resource.data)
+                         .changedKeys()
+                         .hasOnly(['isProfileCreated']);
+
+      // ❌ No delete
+      allow delete: if false;
+    }
+    
+    
+  
+    
+    // firebase rule to read data from payment collection for current auhenticated user
+
+//     match /payments/{userId} {
+//       allow read: if request.auth != null && request.auth.uid == userId;
+//       allow write: if request.auth != null && request.auth.uid == userId;
+      
+//     }
+
+  match /registrationPayment/{agentId} {
+    allow read: if request.auth != null &&
+        (
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == resource.data.agentId
+        );
+
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.userId;
+
+      allow update: if false;
+      allow delete: if false;
+    } 
+  
+    match /registrationPayment/{userId} {
+    allow read: if request.auth != null &&
+        (
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == resource.data.agentId
+        );
+
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.userId;
+
+      allow update: if false;
+      allow delete: if false;
+    } 
+    
+    
+match /afterMarriagePayment/{paymentId} {
+      allow read: if request.auth != null
+      ;
+      
+      allow write: if false; // Payments created via Cloud Functions/Admin SDK
+    }
+  
+    
+     // Users: read/write own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    // Orders: client can READ only their orders
+    match /orders/{orderId} {
+      allow read: if request.auth != null
+        && request.auth.uid == resource.data.uid;
+
+      allow write: if false; // backend only
+    }
+
+    // Amounts: READ ONLY pricing config
+    match /amounts/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    
+     match /supportTickets/{ticketId} {
+
+  allow read: if request.auth != null
+    && (
+      request.query != null
+      || resource.data.userId == request.auth.uid
+      || resource.data.agentId == request.auth.uid
+    );
+
+  allow create: if request.auth != null
+    && request.resource.data.userId == request.auth.uid;
+
+  allow update: if request.auth != null
+    && (
+      resource.data.userId == request.auth.uid ||
+      resource.data.agentId == request.auth.uid
+    );
+
+  allow delete: if false;
+}
+
+
+    
+   match /reviews/{reviewId} {
+
+      // ✅ Any authenticated user can read reviews
+      allow read: if request.auth != null;
+
+      // ✅ Only logged-in user can create a review
+      // userId must match auth UID
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+
+      // ✅ Only review owner can update or delete
+      allow update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+    }
+    
+    
+    
+    
+      match /paymentCredentials/{docId} {
+      allow read: if request.auth != null;
+    }
+    
+
+    // ==========================================
+    // WISHLISTS COLLECTION RULES
+    // ==========================================
+    match /wishlists/{wishlistId} {
+      
+      // Helper function to check if user is authenticated
+      function isAuthenticated() {
+        return request.auth != null;
+      }
+      
+      // Helper function to get user data
+      function getUserData(userId) {
+        return get(/databases/$(database)/documents/users/$(userId)).data;
+      }
+      
+      // Helper function to check if current user is sender
+      function isSender() {
+        return request.auth.uid == resource.data.senderId;
+      }
+      
+      // Helper function to check if current user is receiver
+      function isReceiver() {
+        return request.auth.uid == resource.data.receiverId;
+      }
+      
+      // Helper function to check if current user is sender's agent
+      function isSenderAgent() {
+        return request.auth.uid == resource.data.senderAgent;
+      }
+      
+      // Helper function to check if current user is receiver's agent
+      function isReceiverAgent() {
+        return request.auth.uid == resource.data.receiverAgent;
+      }
+      
+      // Check if user is one of the 4 allowed roles
+      function isAllowedRole() {
+        return isSender() || isReceiver() || isSenderAgent() || isReceiverAgent();
+      }
+      
+      // ========== READ ==========
+      // Allow read if user is sender, receiver, sender's agent, or receiver's agent
+      allow read: if isAuthenticated() && isAllowedRole();
+      
+      // ========== CREATE ==========
+      // Only sender can create a wishlist
+      // Must include all required fields
+      allow create: if isAuthenticated() 
+        && request.auth.uid == request.resource.data.senderId
+        && request.resource.data.keys().hasAll(['senderId', 'receiverId', 'senderAgent', 'receiverAgent', 'status'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.senderId != request.resource.data.receiverId;
+      
+      // ========== UPDATE ==========
+      // All 4 roles can update status
+      // Only status, updatedAt, and updatedBy fields can be modified
+      allow update: if isAuthenticated() 
+        && isAllowedRole()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updatedBy'])
+        && request.resource.data.status in ['pending', 'contacted', 'interested', 'notInterested', 'closed'];
+      
+      // ========== DELETE ==========
+      // Only sender can delete their wishlist
+      allow delete: if isAuthenticated() && isSender();
+    }
+    
+    // ==========================================
+    // QUERY RULES FOR WISHLISTS
+    // ==========================================
+    // These rules allow querying wishlists by senderId, receiverId, senderAgent, or receiverAgent
+    match /wishlists/{wishlistId} {
+      // Allow list queries where user is involved
+      allow list: if isAuthenticated() 
+        && (
+          // User querying their sent wishlists
+          (request.query.limit <= 100 && resource.data.senderId == request.auth.uid)
+          // User querying wishlists they received
+          || (request.query.limit <= 100 && resource.data.receiverId == request.auth.uid)
+          // Agent querying wishlists for their users (as sender agent)
+          || (request.query.limit <= 100 && resource.data.senderAgent == request.auth.uid)
+          // Agent querying wishlists for their users (as receiver agent)
+          || (request.query.limit <= 100 && resource.data.receiverAgent == request.auth.uid)
+        );
+    }
+    
+    
+    
+    
+    
+  }
+}

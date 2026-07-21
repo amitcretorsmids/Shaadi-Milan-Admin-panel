@@ -1,0 +1,1102 @@
+/* VideoPage.module.css */
+
+.page {
+  min-height: 100vh;
+  background: #0a0a0a;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* Topbar */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: #1a1a1a;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  color: white;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logoAccent {
+  color: #ff0000;
+}
+
+.topbarRight {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.metaItem {
+  font-size: 0.875rem;
+  color: #888;
+}
+
+.badge {
+  background: #ff0000;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Layout - Main content + Sidebar */
+.layout {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.mainContent {
+  flex: 2;
+  min-width: 300px;
+}
+
+.sidebar {
+  flex: 1;
+  min-width: 320px;
+  background: #1a1a1a;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: fit-content;
+  max-height: calc(100vh - 100px);
+  position: sticky;
+  top: 1rem;
+}
+
+/* Sidebar Toggle Buttons */
+.sidebarToggle {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: #222;
+  border-bottom: 1px solid #333;
+}
+
+.toggleBtn {
+  flex: 1;
+  padding: 0.75rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.toggleBtn:hover {
+  background: #333;
+}
+
+.toggleBtn.active {
+  background: #ff0000;
+  border-color: #ff0000;
+  color: white;
+}
+
+/* Sidebar Content with Scroll */
+.sidebarContent {
+  flex: 1;
+  overflow-y: auto;
+  max-height: calc(100vh - 180px);
+}
+
+.sidebarContent::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebarContent::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.sidebarContent::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.sidebarContent::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+/* Chapters Section */
+.chaptersSection {
+  padding: 1rem;
+  border-bottom: 1px solid #333;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.chapterList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chapterItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  background: #222;
+  margin-bottom: 0.5rem;
+}
+
+.chapterItem:hover {
+  background: #2a2a2a;
+  transform: translateX(4px);
+}
+
+.activeChapter {
+  background: #3a1a1a;
+  border-left: 3px solid #ff0000;
+}
+
+.chapterTime {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #ff0000;
+  background: rgba(255, 0, 0, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  min-width: 55px;
+  text-align: center;
+}
+
+.chapterLabel {
+  font-size: 0.875rem;
+  color: #ccc;
+  flex: 1;
+}
+
+.activeChapter .chapterLabel {
+  color: white;
+  font-weight: 500;
+}
+
+/* Chat Section */
+.chatSection {
+  display: flex;
+  flex-direction: column;
+  height: 500px;
+  padding: 1rem;
+}
+
+.chatMessages {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chatMessages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chatMessages::-webkit-scrollbar-track {
+  background: #2a2a2a;
+  border-radius: 3px;
+}
+
+.chatMessages::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.chatMessage {
+  background: #222;
+  padding: 0.75rem;
+  border-radius: 8px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.messageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.messageUsername {
+  font-weight: 600;
+  color: #ff0000;
+  font-size: 0.8125rem;
+}
+
+.messageTime {
+  font-size: 0.6875rem;
+  color: #666;
+}
+
+.messageText {
+  color: #ddd;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.chatInputContainer {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.chatInput {
+  flex: 1;
+  padding: 0.75rem;
+  background: #222;
+  border: 1px solid #333;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.chatInput:focus {
+  border-color: #ff0000;
+}
+
+.chatInput::placeholder {
+  color: #666;
+}
+
+.sendButton {
+  padding: 0.75rem 1.25rem;
+  background: #ff0000;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sendButton:hover {
+  background: #cc0000;
+  transform: scale(1.02);
+}
+
+/* Player Card */
+.playerCard {
+  background: #1a1a1a;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.playerWrap {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  background: #000;
+}
+
+.playerIframe,
+.playerWrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: none;
+  z-index: 1;
+}
+
+.topOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: #000;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.bottomOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: #000;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.youtubeClickBlocker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  pointer-events: auto;
+}
+
+.centerPlayButton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.3s ease;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  opacity: 0;
+}
+
+.playerWrap:hover .centerPlayButton {
+  opacity: 1;
+}
+
+.centerPlayButton:hover {
+  background: rgba(0, 0, 0, 0.95);
+  transform: translate(-50%, -50%) scale(1.1);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.playIcon {
+  font-size: 40px;
+  color: white;
+  margin-left: 5px;
+}
+
+.pauseIcon {
+  font-size: 40px;
+  color: white;
+}
+
+.customControls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.95), transparent);
+  padding: 20px 20px 15px 20px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.playerWrap:hover .customControls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.controlsWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.progressContainer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progressBarWrapper {
+  flex: 1;
+  position: relative;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: height 0.2s ease;
+}
+
+.progressBarWrapper:hover {
+  height: 7px;
+}
+
+.progressFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: #ff0000;
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.progressBuffered {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 3px;
+}
+
+.progressHandle {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  background: #ff0000;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.progressBarWrapper:hover .progressHandle {
+  opacity: 1;
+}
+
+.timeText {
+  color: white;
+  font-size: 13px;
+  font-family: monospace;
+  min-width: 100px;
+  text-align: right;
+}
+
+.controlsBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.controlsLeft {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.controlsRight {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.iconBtn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 11;
+}
+
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.volumeContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+.volumeSlider {
+  width: 0;
+  overflow: hidden;
+  transition: width 0.3s ease;
+  opacity: 0;
+}
+
+.volumeContainer:hover .volumeSlider {
+  width: 80px;
+  opacity: 1;
+}
+
+.volumeSlider input {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.volumeSlider input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #ff0000;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.qualityBtn, .speedBtn {
+  position: relative;
+}
+
+.qualityMenu, .speedMenu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 10px;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 8px 0;
+  min-width: 120px;
+  z-index: 25;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.qualityOption, .speedOption {
+  padding: 8px 16px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  width: 100%;
+}
+
+.qualityOption:hover:not(:disabled), .speedOption:hover {
+  background: rgba(255, 0, 0, 0.5);
+}
+
+.qualityOption:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qualityOption.active, .speedOption.active {
+  color: #ff0000;
+  font-weight: bold;
+}
+
+.playerFooter {
+  padding: 1rem;
+}
+
+.videoTitle {
+  font-size: 1rem;
+  color: white;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    position: static;
+    max-height: none;
+  }
+  
+  .sidebarContent {
+    max-height: 400px;
+  }
+  
+  .container {
+    padding: 0.5rem;
+  }
+  
+  .topbar {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+}
+/* Add these styles to your existing VideoPage.module.css */
+
+/* 20-second seek buttons */
+.iconBtn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 11;
+}
+
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+/* For the 20-second buttons specifically */
+.iconBtn[title="Back 20 seconds"],
+.iconBtn[title="Forward 20 seconds"] {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Quality menu with working options */
+.qualityMenu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 10px;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 8px 0;
+  min-width: 140px;
+  z-index: 25;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.qualityMenu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.qualityMenu::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.qualityMenu::-webkit-scrollbar-thumb {
+  background: #ff0000;
+  border-radius: 2px;
+}
+
+.qualityOption {
+  padding: 10px 16px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  width: 100%;
+}
+
+.qualityOption:hover {
+  background: rgba(255, 0, 0, 0.5);
+}
+
+.qualityOption.active {
+  color: #ff0000;
+  font-weight: bold;
+  background: rgba(255, 0, 0, 0.1);
+}
+
+/* Speed menu styles */
+.speedMenu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 10px;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 8px 0;
+  min-width: 100px;
+  z-index: 25;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.speedOption {
+  padding: 8px 16px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  width: 100%;
+}
+
+.speedOption:hover {
+  background: rgba(255, 0, 0, 0.5);
+}
+
+.speedOption.active {
+  color: #ff0000;
+  font-weight: bold;
+}
+/* Add these styles to your VideoPage.module.css */
+
+/* Modern Quality Menu Button */
+.qualityBtn {
+  position: relative;
+}
+
+.qualityBtnMain {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.qualityBtnMain:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.qualityBtnIcon {
+  font-size: 14px;
+}
+
+.qualityBtnText {
+  font-weight: 500;
+}
+
+.qualityBtnArrow {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Modern Quality Menu */
+.qualityMenuModern {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 12px;
+  background: rgba(28, 28, 28, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 12px;
+  min-width: 220px;
+  z-index: 25;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.qualityMenuHeader {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  font-weight: 600;
+  color: #aaa;
+  letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.qualityList {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.qualityList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.qualityList::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.qualityList::-webkit-scrollbar-thumb {
+  background: #ff0000;
+  border-radius: 4px;
+}
+
+/* Quality Item */
+.qualityItem {
+  width: 100%;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 14px;
+  position: relative;
+}
+
+.qualityItem:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.qualityItemActive {
+  background: rgba(255, 0, 0, 0.15);
+  color: #ff0000;
+}
+
+.qualityItemActive .qualityName {
+  color: #ff0000;
+  font-weight: 600;
+}
+
+.qualityItemDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.qualityItemDisabled:hover {
+  background: transparent;
+}
+
+.qualityIcon {
+  font-size: 16px;
+  min-width: 24px;
+}
+
+.qualityName {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.qualityCheck {
+  color: #ff0000;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.qualityUnavailable {
+  font-size: 11px;
+  color: #666;
+  margin-left: 8px;
+}
+
+/* For the quality button display */
+.iconBtn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 11;
+}
+
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+/* Speed Menu Styling */
+.speedMenu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 12px;
+  background: rgba(28, 28, 28, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 12px;
+  padding: 8px 0;
+  min-width: 100px;
+  z-index: 25;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: slideUp 0.2s ease;
+}
+
+.speedOption {
+  padding: 10px 20px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  width: 100%;
+}
+
+.speedOption:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.speedOption.active {
+  color: #ff0000;
+  font-weight: bold;
+  background: rgba(255, 0, 0, 0.1);
+}
+/* Add to your VideoPage.module.css */
+
+/* Quality Menu Header with Loading Badge */
+.qualityMenuHeader {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  font-weight: 600;
+  color: #aaa;
+  letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.loadingBadge {
+  font-size: 10px;
+  color: #ff0000;
+  background: rgba(255, 0, 0, 0.2);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: normal;
+}
+
+/* Quality Item with Resolution */
+.qualityItem {
+  width: 100%;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 14px;
+  position: relative;
+}
+
+.qualityResolution {
+  font-size: 11px;
+  color: #666;
+  margin-left: 4px;
+}
+
+.qualityItemActive .qualityResolution {
+  color: #ff0000;
+}
+
+/* Quality Note for empty state */
+.qualityNote {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+/* Add to your VideoPage.module.css - ensure disabled styles are correct */
+
+/* Quality Item - Disabled state (unavailable qualities) */
+.qualityItemDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qualityItemDisabled:hover {
+  background: transparent;
+  transform: none;
+}
+
+.qualityItemDisabled .qualityName {
+  color: #666;
+}
+
+.qualityUnavailable {
+  font-size: 11px;
+  color: #555;
+  margin-left: auto;
+  font-style: italic;
+}
+
+/* Quality Item - Active state (current quality) */
+.qualityItemActive {
+  background: rgba(255, 0, 0, 0.15);
+}
+
+.qualityItemActive .qualityName {
+  color: #ff0000;
+  font-weight: 600;
+}
+
+.qualityItemActive .qualityIcon {
+  filter: brightness(1.2);
+}
+
+/* Quality Check mark */
+.qualityCheck {
+  color: #ff0000;
+  font-weight: bold;
+  font-size: 16px;
+  margin-left: auto;
+}

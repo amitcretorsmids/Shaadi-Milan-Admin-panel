@@ -1,0 +1,1245 @@
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  Timestamp,
+  limit ,
+  addDoc,
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData,
+  getCountFromServer,
+  setDoc,
+  writeBatch,
+} from 'firebase/firestore';
+import { db } from './firebase'; // Your firebase config
+
+
+import type {
+  User, Agent, Order, PendingApproval, Notification,
+  DashboardStats, MonthlyData, WeeklyData,OriginalAgent,OriginalUser
+} from '@/types';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+const delay = (ms = 400) => new Promise(res => setTimeout(res, ms));
+const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+// ─── Mock Data ──────────────────────────────────────────────────────────────
+const STATES = ['Uttar Pradesh', 'Bihar', 'Madhya Pradesh', 'Rajasthan', 'Gujarat', 'Maharashtra', 'Jharkhand', 'Karnataka'];
+const DISTRICTS: Record<string, string[]> = {
+  'Uttar Pradesh': ['Lucknow', 'Varanasi', 'Kanpur', 'Agra', 'Allahabad'],
+  'Bihar': ['Patna', 'Gaya', 'Muzaffarpur', 'Bhagalpur', 'Darbhanga'],
+  'Madhya Pradesh': ['Bhopal', 'Indore', 'Jabalpur', 'Gwalior', 'Ujjain'],
+  'Rajasthan': ['Jaipur', 'Jodhpur', 'Udaipur', 'Kota', 'Ajmer'],
+  'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar'],
+  'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Nashik', 'Aurangabad'],
+  'Jharkhand': ['Ranchi', 'Jamshedpur', 'Dhanbad', 'Bokaro', 'Hazaribagh'],
+  'Karnataka': ['Bangalore', 'Mysore', 'Hubli', 'Mangalore', 'Belgaum'],
+};
+
+const MALE_NAMES = ['Arjun Tiwari', 'Rahul Verma', 'Sunil Mishra', 'Manoj Dubey', 'Deepak Rao', 'Ashok Pandey', 'Raj Kumar', 'Vikram Singh', 'Aditya Sharma', 'Sanjay Gupta', 'Ravi Yadav', 'Amit Joshi', 'Naveen Kumar', 'Prakash Dubey', 'Dinesh Soni'];
+const FEMALE_NAMES = ['Pooja Yadav', 'Anita Kumari', 'Rekha Singh', 'Kavita Joshi', 'Savita Devi', 'Lata Agarwal', 'Sita Devi', 'Geeta Sharma', 'Meena Gupta', 'Sunita Devi', 'Priya Sharma', 'Aarti Verma', 'Ritu Tiwari', 'Neha Chauhan', 'Seema Patel'];
+const AGENT_NAMES = ['Rajesh Kumar', 'Priya Sharma', 'Amit Singh', 'Sunita Devi', 'Vikram Patel', 'Meena Gupta', 'Suresh Yadav', 'Kavita Mishra'];
+const PLANS: Array<'Standard' | 'Premium' | 'VIP'> = ['Standard', 'Premium', 'VIP'];
+const PLAN_PRICES = { Standard: 1999, Premium: 2999, VIP: 4999 };
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const ISSUES = ['Blurry photo', 'Invalid DOB', 'Missing documents', 'Name mismatch', 'Invalid phone', 'Duplicate entry'];
+
+
+
+
+// ─── Helper Functions ───────────────────────────────────────────────────────
+const convertUser = (doc: any): OriginalUser => {
+  const data = doc.data();
+  return {
+    uid: doc.id,
+    fullName: data.fullName || '',
+    gender: data.gender || 'male',
+    phone: data.phone || '',
+    email: data.email || '',
+    agentId: data.agentId || '',
+    role: data.role || 'user',
+    platform: data.platform || 'web',
+    isProfileCreated: data.isProfileCreated || false,
+    agentNotifiedOnRegister: data.agentNotifiedOnRegister || false,
+    agentNotifiedAt: data.agentNotifiedAt,
+    createdAt: data.createdAt,
+    fcmToken: data.fcmToken,
+    fcmTokenUpdatedAt: data.fcmTokenUpdatedAt,
+  };
+};
+
+const convertAgent = (doc: any): OriginalAgent => {
+  const data = doc.data();
+  return {
+    uid: doc.id,
+    agentId: data.agentId || '',
+    agentName: data.agentName || '',
+    agentEmail: data.agentEmail || '',
+    agentMobile: data.agentMobile || '',
+    agentAddress: data.agentAddress || '',
+    agentCity: data.agentCity || '',
+    agentState: data.agentState || '',
+    agentPincode: data.agentPincode || '',
+    agentAadhar: data.agentAadhar || '',
+    agentLicenseNumber: data.agentLicenseNumber || '',
+    isApproved: data.isApproved || false,
+    isRejected: data.isRejected || false,
+    role: data.role || 'user',
+    platform: data.platform || '',
+    registrationDate: data.registrationDate || '',
+    aadharUrl: data.aadharUrl,
+    primaryImageUrl: data.primaryImageUrl,
+    profileImageUrl: data.profileImageUrl,
+   
+  };
+};
+type UpdateAmountPayload = {
+  id: string;
+  data: {
+    amount?: number;
+    currency?: string;
+    paymentType?: string;
+  };
+};
+
+// ─── API Functions ──────────────────────────────────────────────────────────
+export const firebaseApi = {
+functions: getFunctions(),
+
+createAgentWithAuth: async (data: {
+  agentEmail: string;
+  tempPassword: string;
+  agentName: string;
+  agentMobile: string;
+  agentAddress: string;
+  agentCity: string;
+  agentState: string;
+  agentPincode: string;
+  agentAadhar: string;
+  agentLicenseNumber: string;
+  aadharUrl?: string;
+  primaryImageUrl?: string;
+  profileImageUrl?: string;
+  isApproved?: boolean;
+  isRejected?: boolean;
+  role?: string;
+  platform?: string;
+  registrationDate?: string;
+}) => {
+  try {
+    const fn = httpsCallable(firebaseApi.functions, "createAgentWithAuth");
+
+    const res = await fn(data);
+
+    return res.data as {
+      success: boolean;
+      uid: string;
+    };
+  } catch (error) {
+    console.error("❌ createAgentWithAuth error:", error);
+    throw error;
+  }
+},
+
+// Users
+  getUsers: async (filters?: {
+    gender?: string;
+    state?: string;
+    status?: string;
+    agentId?: string;
+    search?: string;
+  }): Promise<OriginalUser[]> => {
+    let usersRef = collection(db, 'users');
+    let constraints = [];
+    
+    if (filters?.agentId && filters.agentId !== 'All') {
+      constraints.push(where('agentId', '==', filters.agentId));
+    }
+    
+    if (filters?.gender && filters.gender !== 'All') {
+      constraints.push(where('gender', '==', filters.gender.toLowerCase()));
+    }
+    
+    const q = constraints.length > 0 ? query(usersRef, ...constraints) : usersRef;
+    const snapshot = await getDocs(q);
+    
+    let users = snapshot.docs.map(convertUser);
+    
+    // Client-side filtering for fields not in Firebase
+    if (filters?.search) {
+      const s = filters.search.toLowerCase();
+      users = users.filter(u => 
+        u.fullName.toLowerCase().includes(s) || 
+        u.phone.includes(s) || 
+        u.uid.toLowerCase().includes(s)
+      );
+    }
+    
+    return users;
+  },
+
+getUsersPaginated: async (filters?: {
+  gender?: string;
+  state?: string;
+  status?: string;
+  agentId?: string;
+  search?: string;
+  pageSize?: number;
+  lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
+}): Promise<{
+  users: OriginalUser[];
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+}> => {
+  try {
+    const usersRef = collection(db, "users");
+    const pageSize = filters?.pageSize || 10;
+
+    let constraints: any[] = [];
+
+    // console.log("🔥 Incoming Filters:", filters);
+
+    // ✅ Always add orderBy FIRST (important for pagination)
+    constraints.push(orderBy("createdAt", "desc"));
+
+    // ✅ Filters
+    if (filters?.agentId && filters.agentId !== "All") {
+      constraints.push(where("agentId", "==", filters.agentId));
+    }
+
+    if (filters?.gender && filters.gender !== "All") {
+      constraints.push(where("gender", "==", filters.gender.toLowerCase()));
+    }
+
+    // ✅ Pagination
+    if (filters?.lastDoc) {
+      // console.log("➡️ Using lastDoc for pagination:", filters.lastDoc.id);
+      constraints.push(startAfter(filters.lastDoc));
+    }
+
+    constraints.push(limit(pageSize));
+
+    // ✅ Build query
+    const q = query(usersRef, ...constraints);
+
+    // console.log("📡 Firestore Query Constraints:", constraints);
+
+    const snapshot = await getDocs(q);
+
+    // console.log("📊 Raw Docs Count:", snapshot.docs.length);
+
+    let users = snapshot.docs.map(convertUser);
+
+    // ✅ Client-side search
+    if (filters?.search?.trim()) {
+      const searchTerm = filters.search.toLowerCase().trim();
+
+      users = users.filter((u) =>
+        u.fullName?.toLowerCase().includes(searchTerm) ||
+        u.phone?.includes(searchTerm) ||
+        u.uid?.toLowerCase().includes(searchTerm) ||
+        u.email?.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // ✅ FIX: Always take lastDoc from snapshot (NOT based on filtered users)
+    const newLastDoc =
+      snapshot.docs.length > 0
+        ? snapshot.docs[snapshot.docs.length - 1]
+        : null;
+
+    // console.log("✅ Final Output:", {
+    //   returnedUsers: users.length,
+    //   nextPageAvailable: snapshot.docs.length === pageSize,
+    //   lastDocId: newLastDoc?.id || null,
+    // });
+
+    return {
+      users,
+      lastDoc: newLastDoc,
+    };
+  } catch (error: any) {
+    console.error("❌ Firestore Error:", error);
+
+    // 🔥 VERY IMPORTANT: shows index error
+    if (error.code === "failed-precondition") {
+      console.error("🚨 Missing Index! Create it from this link:");
+      console.error(error.message);
+    }
+
+    throw error;
+  }
+},
+getUsersStats: async () => {
+  const usersRef = collection(db, "users");
+
+  const totalSnap = await getCountFromServer(usersRef);
+
+  const maleSnap = await getCountFromServer(
+    query(usersRef, where("gender", "==", "male"))
+  );
+
+  const femaleSnap = await getCountFromServer(
+    query(usersRef, where("gender", "==", "female"))
+  );
+
+  const profileSnap = await getCountFromServer(
+    query(usersRef, where("isProfileCreated", "==", true))
+  );
+
+  return {
+    total: totalSnap.data().count,
+    male: maleSnap.data().count,
+    female: femaleSnap.data().count,
+    profileCreated: profileSnap.data().count,
+  };
+},
+
+  getUser: async (uid: string): Promise<OriginalUser | null> => {
+    const userRef = doc(db, 'users', uid);
+    const snapshot = await getDoc(userRef);
+    return snapshot.exists() ? convertUser(snapshot) : null;
+  },
+
+updateUser: async (id: string, data: Partial<OriginalUser>): Promise<void> => {
+  try {
+    const docRef = doc(db, 'users', id);
+
+    // 🔥 Remove undefined fields
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    );
+
+    // ❗ Prevent empty update
+    if (Object.keys(cleanData).length === 0) {
+      console.warn("⚠️ No valid fields to update");
+      return;
+    }
+
+    // console.log("🔥 Updating user:", {
+    //   id,
+    //   cleanData
+    // });
+
+    await updateDoc(docRef, cleanData);
+
+    console.log("✅ User updated successfully:", id);
+
+  } catch (error: any) {
+    console.error("❌ Update failed:", {
+      message: error?.message,
+      code: error?.code,
+      fullError: error
+    });
+
+    // 🔥 Optional: rethrow for React Query
+    throw error;
+  }
+},
+
+  // Agents
+  getAgents: async (): Promise<OriginalAgent[]> => {
+    const agentsRef = collection(db, 'agents');
+    const snapshot = await getDocs(agentsRef);
+    return snapshot.docs.map(convertAgent);
+  },
+
+
+  getAgentsStats: async () => {
+    try {
+      const agentsRef = collection(db, "agents");
+
+      console.log("Fetching agents stats...");
+
+      const snapshot = await getDocs(agentsRef);
+
+      const agents = snapshot.docs.map(doc => doc.data());
+
+      console.log("Total agents fetched:", agents.length);
+
+      const now = new Date();
+
+      let total = agents.length;
+      let active = 0;
+      let inactive = 0;
+      let newThisMonth = 0;
+
+      agents.forEach((a) => {
+        // ✅ Active / Inactive logic
+        if (a.isRejected === true) {
+          inactive++;
+        } else {
+          active++;
+        }
+
+        // ✅ New this month logic
+        if (a.registrationDate) {
+          let regDate: Date;
+
+          if (a.registrationDate.seconds) {
+            // Firestore Timestamp
+            regDate = new Date(a.registrationDate.seconds * 1000);
+          } else {
+            // String date
+            regDate = new Date(a.registrationDate);
+          }
+
+          if (
+            regDate.getMonth() === now.getMonth() &&
+            regDate.getFullYear() === now.getFullYear()
+          ) {
+            newThisMonth++;
+          }
+        }
+      });
+
+      const result = {
+        total,
+        active,
+        inactive,
+        newThisMonth,
+      };
+
+      console.log("Agent stats result:", result);
+
+      return result;
+
+    } catch (error) {
+      console.error("Error fetching agent stats:", error);
+      throw error;
+    }
+  },
+
+getAgentsPaginated: async (filters?: {
+    search?: string;
+    pageSize?: number;
+    lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
+  }): Promise<{
+    agents: OriginalAgent[];
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  }> => {
+    try {
+      const agentsRef = collection(db, "agents");
+      const constraints: any[] = [];
+
+      const pageSize = filters?.pageSize || 10;
+
+      console.log("Agents filters:", filters);
+
+      // ✅ Latest first (IMPORTANT)
+      constraints.push(orderBy("registrationDate", "desc"));
+
+      // ✅ Pagination
+      constraints.push(limit(pageSize));
+
+      if (filters?.lastDoc) {
+        constraints.push(startAfter(filters.lastDoc));
+      }
+
+      const q = query(agentsRef, ...constraints);
+      const snapshot = await getDocs(q);
+
+      let agents = snapshot.docs.map(convertAgent);
+
+      // ✅ Search (client-side)
+      if (filters?.search?.trim()) {
+        const s = filters.search.toLowerCase();
+        agents = agents.filter((a) =>
+          a.agentName?.toLowerCase().includes(s) ||
+          a.agentMobile?.includes(s) ||
+          a.agentEmail?.toLowerCase().includes(s) ||
+          a.agentId?.toLowerCase().includes(s)
+        );
+      }
+
+      console.log("Agents fetched:", agents.length);
+
+      return {
+        agents,
+        lastDoc:
+          snapshot.docs.length > 0
+            ? snapshot.docs[snapshot.docs.length - 1]
+            : null,
+      };
+    } catch (error) {
+      console.error("Error fetching agents:", error);
+      throw error;
+    }
+  },
+
+getAgent: async (uid: string): Promise<OriginalAgent | null> => {
+    const agentRef = doc(db, 'agents', uid);
+    const snapshot = await getDoc(agentRef);
+    return snapshot.exists() ? convertAgent(snapshot) : null;
+  },
+
+  createAgent: async (data: Omit<OriginalAgent, 'uid'>): Promise<void> => {
+  const ref = doc(collection(db, 'agents')); // auto ID
+
+  const finalData = {
+    ...data,
+
+    agentId: ref.id,      // 🔥 same as doc id
+
+    
+  };
+
+  await setDoc(ref, finalData);
+},
+
+  getAgentByCustomId: async (agentId: string): Promise<OriginalAgent | null> => {
+    const agentsRef = collection(db, 'agents');
+    const q = query(agentsRef, where('agentId', '==', agentId));
+    const snapshot = await getDocs(q);
+    return snapshot.empty ? null : convertAgent(snapshot.docs[0]);
+  },
+
+  updateUsersAgentId: async (oldAgentId: string, newAgentId: string): Promise<void> => {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('agentId', '==', oldAgentId));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return;
+
+    // Firestore batch supports up to 500 writes — split if needed
+    const BATCH_SIZE = 500;
+    const docs = snapshot.docs;
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + BATCH_SIZE).forEach(d => {
+        batch.update(d.ref, { agentId: newAgentId });
+      });
+      await batch.commit();
+    }
+  },
+
+
+
+  updateAgent: async (
+  uid: string,
+  data: Partial<OriginalAgent>
+): Promise<void> => {
+  try {
+    const docRef = doc(db, "agents", uid);
+
+    // 🔥 Remove undefined values (VERY IMPORTANT)
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    );
+
+    console.log("Updating agent:", uid, cleanData);
+
+    await updateDoc(docRef, cleanData);
+
+    console.log("Agent updated successfully ✅");
+
+  } catch (error) {
+    console.error("Error updating agent ❌:", error);
+    throw error;
+  }
+},
+
+
+  deleteAgent: async (uid: string): Promise<void> => {
+    try {
+      // Cloud Function deletes both Auth user and Firestore doc
+      const fn = httpsCallable(firebaseApi.functions, 'deleteUserFromAuth');
+      await fn({ uid });
+    } catch (error) {
+      console.error('Error deleting agent ❌:', error);
+      throw error;
+    }
+  },
+
+// Payments
+getPaymentsPaginated: async (filters?: {
+  agentId?: string;
+  status?: string;
+  paymentType?: string;
+  search?: string;
+  pageSize?: number;
+  lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
+}): Promise<{
+  payments: any[];
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+}> => {
+  try {
+    const paymentsRef = collection(db, "payments");
+
+    const pageSize = filters?.pageSize || 10;
+    let constraints: any[] = [];
+
+    // ✅ IMPORTANT: orderBy required for pagination
+    constraints.push(orderBy("createdAt", "desc"));
+
+    // ✅ Filter by agentId
+    if (filters?.agentId && filters.agentId !== "All") {
+      constraints.push(where("agentId", "==", filters.agentId));
+    }
+
+    // ✅ Filter by status
+    if (filters?.status && filters.status !== "All") {
+      constraints.push(where("status", "==", filters.status));
+    }
+
+    // ✅ Filter by paymentType
+    if (filters?.paymentType && filters.paymentType !== "All") {
+      constraints.push(where("paymentType", "==", filters.paymentType));
+    }
+
+    // ✅ Pagination
+    if (filters?.lastDoc) {
+      constraints.push(startAfter(filters.lastDoc));
+    }
+
+    constraints.push(limit(pageSize));
+
+    const q = query(paymentsRef, ...constraints);
+
+    const snapshot = await getDocs(q);
+
+    let payments = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    // ✅ Client-side search
+    if (filters?.search?.trim()) {
+      const s = filters.search.toLowerCase();
+
+      payments = payments.filter((p: any) =>
+        p.fullName?.toLowerCase().includes(s) ||
+        p.phone?.includes(s) ||
+        p.email?.toLowerCase().includes(s) ||
+        p.orderId?.toLowerCase().includes(s)
+      );
+    }
+
+    const newLastDoc =
+      snapshot.docs.length > 0
+        ? snapshot.docs[snapshot.docs.length - 1]
+        : null;
+
+    return {
+      payments,
+      lastDoc: newLastDoc,
+    };
+  } catch (error: any) {
+    console.error("❌ Error fetching payments:", error);
+
+    // 🔥 Handle index error (very common in Firestore)
+    if (error.code === "failed-precondition") {
+      console.error("🚨 Missing Firestore Index:");
+      console.error(error.message);
+    }
+
+    throw error;
+  }
+},
+getPaymentsSummary: async (filters?: {
+  agentId?: string;
+}): Promise<{
+  totalRevenue: number;
+  paidCount: number;
+  pendingCount: number;
+  failedCount: number;
+  totalOrders: number;
+}> => {
+  try {
+    const paymentsRef = collection(db, "payments");
+
+    let constraints: any[] = [];
+
+    // ✅ Filter by agentId
+    if (filters?.agentId && filters.agentId !== "All") {
+      constraints.push(where("agentId", "==", filters.agentId));
+    }
+
+    const q =
+      constraints.length > 0
+        ? query(paymentsRef, ...constraints)
+        : paymentsRef;
+
+    const snapshot = await getDocs(q);
+
+    let totalRevenue = 0;
+    let paidCount = 0;
+    let pendingCount = 0;
+    let failedCount = 0;
+
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data();
+
+      if (data.status === "Paid") {
+        totalRevenue += data.amount || 0;
+        paidCount++;
+      } else if (data.status === "PENDING") {
+        pendingCount++;
+      } else if (data.status === "Failed") {
+        failedCount++;
+      }
+    });
+
+    return {
+      totalRevenue,
+      paidCount,
+      pendingCount,
+      failedCount,
+      totalOrders: snapshot.size,
+    };
+  } catch (error) {
+    console.error("❌ Error fetching payments summary:", error);
+    throw error;
+  }
+},
+
+
+getDashboardCounts: async (): Promise<{
+  totalUsers: number;
+  totalMale: number;
+  totalFemale: number;
+  totalAgents: number;
+}> => {
+  try {
+    const usersRef = collection(db, "users");
+    const agentsRef = collection(db, "agents");
+
+    // ✅ Parallel queries (faster 🚀)
+    const [
+      totalUsersSnap,
+      maleSnap,
+      femaleSnap,
+      agentsSnap
+    ] = await Promise.all([
+      getCountFromServer(usersRef),
+
+      getCountFromServer(
+        query(usersRef, where("gender", "==", "male"))
+      ),
+
+      getCountFromServer(
+        query(usersRef, where("gender", "==", "female"))
+      ),
+
+      getCountFromServer(agentsRef)
+    ]);
+
+    return {
+      totalUsers: totalUsersSnap.data().count,
+      totalMale: maleSnap.data().count,
+      totalFemale: femaleSnap.data().count,
+      totalAgents: agentsSnap.data().count,
+    };
+  } catch (error) {
+    console.error("❌ Error fetching dashboard counts:", error);
+    throw error;
+  }
+},
+
+// Send bulk notification using Firebase Function
+sendBulkNotification: async (data: {
+  target: string;
+  title: string;
+  message: string;
+}): Promise<{ success: boolean; sentCount: number; totalUsers: number }> => {
+  try {
+    const sendNotification = httpsCallable(firebaseApi.functions, 'sendBulkNotification');
+    const result = await sendNotification(data);
+    return result.data as { success: boolean; sentCount: number; totalUsers: number };
+  } catch (error: any) {
+    console.error("❌ Error sending notification:", error);
+    throw error;
+  }
+},
+
+// Get all notifications using Firebase Function
+getAllNotifications: async (filters?: {
+  target?: string;
+  status?: string;
+  limit?: number;
+  lastDocId?: string;
+}): Promise<{
+  notifications: any[];
+  lastDocId: string | null;
+}> => {
+  try {
+    const getNotifications = httpsCallable(firebaseApi.functions, 'getAllNotifications');
+    const result = await getNotifications(filters || {});
+    return result.data as { notifications: any[]; lastDocId: string | null };
+  } catch (error: any) {
+    console.error("❌ Error fetching notifications:", error);
+    throw error;
+  }
+},
+
+// Get user profile from metrimony_profiles collection
+getUserProfile: async (userId: string): Promise<any | null> => {
+  try {
+    const profileRef = doc(db, 'metrimony_profiles', userId);
+    const snapshot = await getDoc(profileRef);
+    return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+  } catch (error) {
+    console.error("❌ Error fetching user profile:", error);
+    throw error;
+  }
+},
+// Get users with their profiles (joined data)
+getUsersWithProfiles: async (filters?: {
+  gender?: string;
+  state?: string;
+  agentId?: string;
+  search?: string;
+}): Promise<any[]> => {
+  try {
+    let usersRef = collection(db, 'users');
+    let constraints: any[] = [];
+
+    // ✅ Filters
+    if (filters?.agentId && filters.agentId !== 'All') {
+      constraints.push(where('agentId', '==', filters.agentId));
+    }
+
+    if (filters?.gender && filters.gender !== 'All') {
+      constraints.push(where('gender', '==', filters.gender.toLowerCase()));
+    }
+
+    // ✅ ORDER BY (latest first)
+    constraints.push(orderBy('createdAt', 'desc'));
+
+    // 🔥 Build query
+    const q = query(usersRef, ...constraints);
+    const userSnapshot = await getDocs(q);
+    const users = userSnapshot.docs.map(convertUser);
+
+    // 🔥 Get profiles
+    const usersWithProfiles = await Promise.all(
+      users.map(async (user) => {
+        const profile = await firebaseApi.getUserProfile(user.uid);
+
+        return {
+          ...user,
+          profile: profile || null,
+          profileDetails: profile ? {
+            caste: profile.cultural?.caste,
+            religion: profile.cultural?.religion,
+            education: profile.education?.education?.course,
+            occupation: profile.employment?.designation,
+            annualIncome: profile.employment?.annualIncome,
+            age: profile.identity?.age,
+            dob: profile.identity?.dob,
+            height: profile.physical?.height,
+            weight: profile.physical?.weight,
+            bodyType: profile.physical?.bodyType,
+            complexion: profile.physical?.complexion,
+            familyType: profile.family?.familyType,
+            familyStatus: profile.family?.familyStatus,
+            aboutMe: profile.identity?.aboutMe,
+            profileStatus: profile.profileStatus,
+            images: profile.images,
+          } : null
+        };
+      })
+    );
+
+    // 🔍 Client-side search
+    let result = usersWithProfiles;
+    if (filters?.search) {
+      const s = filters.search.toLowerCase();
+      result = result.filter(u => 
+        u.fullName.toLowerCase().includes(s) || 
+        u.phone.includes(s) || 
+        u.uid.toLowerCase().includes(s)
+      );
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error("❌ Error fetching users with profiles:", error);
+    throw error;
+  }
+},
+
+getAmounts: async () => {
+  const snap = await getDocs(collection(db, "amounts"));
+
+  const data: Record<string, any> = {};
+
+  snap.docs.forEach(doc => {
+    data[doc.id] = doc.data();
+  });
+
+  return data;
+},
+// updateAmount: async ({
+//   id,
+//   data,
+// }: {
+//   id: string;
+//   data: any;
+// }) => {
+//   const ref = doc(db, "amounts", id);
+
+//   // 🔥 remove undefined
+//   const cleanData = Object.fromEntries(
+//     Object.entries(data).filter(([_, v]) => v !== undefined)
+//   );
+
+//   await updateDoc(ref, cleanData);
+
+//   return true;
+// },
+
+updateAmount :async ({
+  id,
+  data,
+}: UpdateAmountPayload): Promise<boolean> => {
+  try {
+    const ref = doc(db, "amounts", id);
+
+    // 🔥 Remove undefined values
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    );
+
+    if (Object.keys(cleanData).length === 0) {
+      console.warn("⚠️ No valid fields to update");
+      return false;
+    }
+
+    // ✅ setDoc with merge → works for create + update
+    await setDoc(ref, cleanData, { merge: true });
+
+    console.log("✅ Amount updated:", id);
+
+    return true;
+  } catch (error: any) {
+    console.error("❌ Error updating amount:", {
+      message: error?.message,
+      code: error?.code,
+      fullError: error,
+    });
+
+    throw error; // important for React Query
+  }
+},
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ─── Generated Data ──────────────────────────────────────────────────────────
+export const mockAgents: Agent[] = AGENT_NAMES.map((name, i) => {
+  const state = STATES[i % STATES.length];
+  const dist = DISTRICTS[state][0];
+  const users = rand(80, 220);
+  const paid = Math.floor(users * (rand(60, 80) / 100));
+  return {
+    id: `ARV-AG-${String(i + 1).padStart(3, '0')}`,
+    name,
+    phone: `98${rand(10000000, 99999999)}`,
+    email: `${name.split(' ')[0].toLowerCase()}@arvika.in`,
+    state,
+    district: dist,
+    joinedAt: `2024-0${i + 1}-15`,
+    status: i < 6 ? 'Active' : 'Inactive',
+    usersAdded: users,
+    usersPaid: paid,
+    conversionRate: Math.round((paid / users) * 100),
+    totalRevenue: paid * PLAN_PRICES.Standard,
+    thisWeekReg: rand(8, 18),
+    lastWeekReg: rand(6, 15),
+    thisWeekFixed: rand(3, 9),
+    lastWeekFixed: rand(2, 7),
+  };
+});
+
+export const mockUsers: User[] = [
+  ...MALE_NAMES.map((name, i) => {
+    const state = STATES[i % STATES.length];
+    const dist = DISTRICTS[state][i % DISTRICTS[state].length];
+    return {
+      id: `ARV-M-${1001 + i}`,
+      name,
+      gender: 'Male' as const,
+      age: rand(22, 40),
+      state,
+      district: dist,
+      agentId: mockAgents[i % mockAgents.length].id,
+      status: (['Active', 'Verified', 'Pending', 'Active', 'Active'] as const)[i % 5],
+      paid: i % 3 !== 2,
+      plan: PLANS[i % 3],
+      phone: `97${rand(10000000, 99999999)}`,
+      email: `${name.split(' ')[0].toLowerCase()}@email.com`,
+      joinedAt: `2025-01-${String(rand(1, 31)).padStart(2, '0')}`,
+    };
+  }),
+  ...FEMALE_NAMES.map((name, i) => {
+    const state = STATES[(i + 2) % STATES.length];
+    const dist = DISTRICTS[state][i % DISTRICTS[state].length];
+    return {
+      id: `ARV-F-${1001 + i}`,
+      name,
+      gender: 'Female' as const,
+      age: rand(18, 35),
+      state,
+      district: dist,
+      agentId: mockAgents[(i + 1) % mockAgents.length].id,
+      status: (['Active', 'Verified', 'Pending', 'Active', 'Suspended'] as const)[i % 5],
+      paid: i % 4 !== 3,
+      plan: PLANS[(i + 1) % 3],
+      phone: `96${rand(10000000, 99999999)}`,
+      email: `${name.split(' ')[0].toLowerCase()}@email.com`,
+      joinedAt: `2025-01-${String(rand(1, 31)).padStart(2, '0')}`,
+    };
+  }),
+];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const mockApprovals: PendingApproval[] = [
+  { id: 'ARV-M-1030', name: 'Deepak Rao', gender: 'Male', age: 30, state: 'Karnataka', district: 'Bangalore', agentId: 'ARV-AG-005', issue: 'Blurry photo', submittedAt: '2025-01-10', documents: ['Aadhaar', 'Photo'] },
+  { id: 'ARV-F-1031', name: 'Savita Devi', gender: 'Female', age: 23, state: 'Jharkhand', district: 'Ranchi', agentId: 'ARV-AG-002', issue: 'Invalid DOB', submittedAt: '2025-01-11', documents: ['Aadhaar', 'Birth Cert'] },
+  { id: 'ARV-M-1032', name: 'Ashok Pandey', gender: 'Male', age: 35, state: 'Uttar Pradesh', district: 'Kanpur', agentId: 'ARV-AG-001', issue: 'Missing documents', submittedAt: '2025-01-12', documents: ['Aadhaar'] },
+  { id: 'ARV-F-1033', name: 'Lata Agarwal', gender: 'Female', age: 26, state: 'Madhya Pradesh', district: 'Jabalpur', agentId: 'ARV-AG-003', issue: 'Name mismatch', submittedAt: '2025-01-12', documents: ['Aadhaar', 'PAN'] },
+];
+
+export const mockOrders: Order[] = [
+  ...mockUsers.slice(0, 12).map((u, i) => ({
+    id: `ORD-2025-${String(i + 1).padStart(3, '0')}`,
+    userId: u.id,
+    userName: u.name,
+    userType: u.gender as 'Male' | 'Female',
+    plan: PLANS[i % 3],
+    amount: PLAN_PRICES[PLANS[i % 3]],
+    date: `2025-01-${String(rand(1, 15)).padStart(2, '0')}`,
+    status: (['Paid', 'Paid', 'Paid', 'Pending', 'Paid', 'Failed'] as const)[i % 6],
+    agentId: u.agentId,
+  })),
+];
+
+export const mockNotifications: Notification[] = [
+  { id: 'N-001', target: 'Male', title: 'Profile Verified', message: 'Your profile has been verified successfully.', sentAt: '2025-01-10', sentTo: 234, status: 'Delivered' },
+  { id: 'N-002', target: 'Female', title: 'Special Offer', message: 'Upgrade to Premium and get matches faster!', sentAt: '2025-01-09', sentTo: 189, status: 'Delivered' },
+  { id: 'N-003', target: 'Agent', title: 'Payout Processed', message: 'Weekly payout has been processed. Check your account.', sentAt: '2025-01-08', sentTo: 47, status: 'Delivered' },
+  { id: 'N-004', target: 'Male', title: 'New Profiles Added', message: 'New female profiles added in your area!', sentAt: '2025-01-07', sentTo: 312, status: 'Delivered' },
+  { id: 'N-005', target: 'All', title: 'App Update', message: 'Arvika app v2.0 is now available. Please update.', sentAt: '2025-01-06', sentTo: 3345, status: 'Delivered' },
+];
+
+export const mockMonthlyData: MonthlyData[] = MONTHS.map((month, i) => {
+  const male = rand(80, 140);
+  const female = rand(60, 110);
+  const maleFixed = rand(20, 45);
+  const femaleFixed = rand(18, 38);
+  return {
+    month,
+    male,
+    female,
+    agent: rand(3, 8),
+    maleFixed,
+    femaleFixed,
+    marriages: Math.floor((maleFixed + femaleFixed) * 0.35),
+    revenue: (male + female) * rand(1800, 3500),
+  };
+});
+
+export const mockWeeklyData: WeeklyData[] = Array.from({ length: 8 }, (_, i) => ({
+  week: `Wk ${i + 1}`,
+  registrations: rand(35, 70),
+  fixed: rand(10, 25),
+  revenue: rand(60000, 150000),
+}));
+
+export const mockDashboardStats: DashboardStats = {
+  totalRegistrations: 3345,
+  maleFixed: 486,
+  femaleFixed: 406,
+  maleMarried: 174,
+  femaleMarried: 173,
+  totalAgents: 47,
+  activeAgents: 39,
+  pendingApprovals: 4,
+  monthlyRevenue: 892500,
+  registrationGrowth: 12,
+  fixedGrowth: 8,
+  marriageGrowth: 15,
+};
+
+// ─── API Functions (React Query fetchers) ────────────────────────────────────
+export const api = {
+  getDashboardStats: async (): Promise<DashboardStats> => {
+    await delay(300);
+    return mockDashboardStats;
+  },
+
+  getMonthlyData: async (period: string): Promise<MonthlyData[]> => {
+    await delay(350);
+    if (period === 'Weekly') return mockMonthlyData.slice(0, 4);
+    return mockMonthlyData;
+  },
+
+  getWeeklyData: async (): Promise<WeeklyData[]> => {
+    await delay(300);
+    return mockWeeklyData;
+  },
+
+  getUsers: async (filters?: {
+    gender?: string;
+    state?: string;
+    status?: string;
+    agentId?: string;
+    search?: string;
+  }): Promise<User[]> => {
+    await delay(400);
+    let users = [...mockUsers];
+    if (filters?.gender && filters.gender !== 'All') {
+      users = users.filter(u => u.gender === filters.gender);
+    }
+    if (filters?.state && filters.state !== 'All') {
+      users = users.filter(u => u.state === filters.state);
+    }
+    if (filters?.status && filters.status !== 'All') {
+      users = users.filter(u => u.status === filters.status);
+    }
+    if (filters?.agentId && filters.agentId !== 'All') {
+      users = users.filter(u => u.agentId === filters.agentId);
+    }
+    if (filters?.search) {
+      const s = filters.search.toLowerCase();
+      users = users.filter(u =>
+        u.name.toLowerCase().includes(s) ||
+        u.id.toLowerCase().includes(s) ||
+        u.phone.includes(s)
+      );
+    }
+    return users;
+  },
+
+  getUser: async (id: string): Promise<User | null> => {
+    await delay(200);
+    return mockUsers.find(u => u.id === id) || null;
+  },
+
+  updateUser: async (id: string, data: Partial<User>): Promise<User> => {
+    await delay(500);
+    const idx = mockUsers.findIndex(u => u.id === id);
+    if (idx === -1) throw new Error('User not found');
+    Object.assign(mockUsers[idx], data);
+    return mockUsers[idx];
+  },
+
+  getAgents: async (): Promise<Agent[]> => {
+    await delay(350);
+    return mockAgents;
+  },
+
+  getAgent: async (id: string): Promise<Agent | null> => {
+    await delay(200);
+    return mockAgents.find(a => a.id === id) || null;
+  },
+
+  createAgent: async (data: Omit<Agent, 'id' | 'usersAdded' | 'usersPaid' | 'conversionRate' | 'totalRevenue' | 'thisWeekReg' | 'lastWeekReg' | 'thisWeekFixed' | 'lastWeekFixed'>): Promise<Agent> => {
+    await delay(600);
+    const newAgent: Agent = {
+      ...data,
+      id: `ARV-AG-${String(mockAgents.length + 1).padStart(3, '0')}`,
+      usersAdded: 0,
+      usersPaid: 0,
+      conversionRate: 0,
+      totalRevenue: 0,
+      thisWeekReg: 0,
+      lastWeekReg: 0,
+      thisWeekFixed: 0,
+      lastWeekFixed: 0,
+    };
+    mockAgents.push(newAgent);
+    return newAgent;
+  },
+
+  getPendingApprovals: async (): Promise<PendingApproval[]> => {
+    await delay(300);
+    return mockApprovals;
+  },
+
+  processApproval: async (id: string, action: 'Approved' | 'Rejected'): Promise<void> => {
+    await delay(500);
+    const idx = mockApprovals.findIndex(a => a.id === id);
+    if (idx !== -1) mockApprovals.splice(idx, 1);
+  },
+
+  getOrders: async (filters?: { status?: string; userType?: string }): Promise<Order[]> => {
+    await delay(350);
+    let orders = [...mockOrders];
+    if (filters?.status && filters.status !== 'All') {
+      orders = orders.filter(o => o.status === filters.status);
+    }
+    if (filters?.userType && filters.userType !== 'All') {
+      orders = orders.filter(o => o.userType === filters.userType);
+    }
+    return orders;
+  },
+
+  getNotifications: async (): Promise<Notification[]> => {
+    await delay(300);
+    return mockNotifications;
+  },
+
+  sendNotification: async (data: {
+    target: string;
+    title: string;
+    message: string;
+  }): Promise<Notification> => {
+    await delay(700);
+    const notif: Notification = {
+      id: `N-${String(mockNotifications.length + 1).padStart(3, '0')}`,
+      target: data.target as any,
+      title: data.title,
+      message: data.message,
+      sentAt: new Date().toISOString().split('T')[0],
+      sentTo: data.target === 'All' ? 3345 : data.target === 'Male' ? 1842 : data.target === 'Female' ? 1456 : 47,
+      status: 'Delivered',
+    };
+    mockNotifications.unshift(notif);
+    return notif;
+  },
+};
