@@ -39,6 +39,24 @@ interface AgentOption {
   name: string;
 }
 
+// ─── Helper: safely extract a string from Firebase fields that may be objects ──
+// Some Firebase fields are stored as { en: "value", hi: "value" } instead of plain strings
+function getString(value: unknown, fallback = ''): string {
+  if (value == null) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    // Try common language keys
+    if (typeof obj.en === 'string') return obj.en;
+    if (typeof obj.hi === 'string') return obj.hi;
+    // Return first string value found
+    const firstStr = Object.values(obj).find(v => typeof v === 'string');
+    if (firstStr) return firstStr as string;
+  }
+  return fallback;
+}
+
 export default function UsersPage() {
   const [gender, setGender] = useState<GenderType>('All');
   const [agentId, setAgentId] = useState<string>('All');
@@ -289,8 +307,8 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
               onChange={e => setAgentId(e.target.value)}
               className="min-w-[150px]"
             >
-              {agentOptions.map(opt => (
-                <option key={opt.id} value={opt.id}>{opt.name}</option>
+              {agentOptions.map((opt, idx) => (
+                <option key={opt.id || `agent-opt-${idx}`} value={opt.id}>{opt.name || 'Unnamed Agent'}</option>
               ))}
             </Select>
 
@@ -342,27 +360,27 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
                   <Td>
                     <div className="flex items-center gap-3">
                       <Avatar 
-                        name={u.fullName} 
+                        name={getString(u.fullName)} 
                         size="md"
-                        gender={u.gender}
+                        gender={getString(u.gender)}
                       />
                       <div>
-                        <div className="font-medium text-[var(--text)]">{u.fullName}</div>
-                        <Badge variant={u.gender === 'male' ? 'male' : u.gender === 'female' ? 'female' : 'neutral'}>
-                          {u.gender || 'Not specified'}
+                        <div className="font-medium text-[var(--text)]">{getString(u.fullName) || '—'}</div>
+                        <Badge variant={getString(u.gender) === 'male' ? 'male' : getString(u.gender) === 'female' ? 'female' : 'neutral'}>
+                          {getString(u.gender) || 'Not specified'}
                         </Badge>
                       </div>
                     </div>
                   </Td>
                   <Td>
                     <code className="text-[11px] bg-[var(--bg-surface)] px-2 py-1 rounded">
-                      {u.uid.slice(0, 8)}...
+                      {(getString(u.uid) || u.uid || '').slice(0, 8)}...
                     </code>
                   </Td>
-                  <Td className="font-mono text-xs">{u.phone}</Td>
+                  <Td className="font-mono text-xs">{getString(u.phone) || '—'}</Td>
                   <Td>
                     <span className="text-xs text-[var(--text-muted)]">
-                      {u.email || '—'}
+                      {getString(u.email) || '—'}
                     </span>
                   </Td>
                   <Td>

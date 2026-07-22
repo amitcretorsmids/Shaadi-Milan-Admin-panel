@@ -8,7 +8,7 @@ import {
   where,
   orderBy,
   Timestamp,
-  limit ,
+  limit,
   addDoc,
   startAfter,
   QueryDocumentSnapshot,
@@ -22,7 +22,7 @@ import { db } from './firebase'; // Your firebase config
 
 import type {
   User, Agent, Order, PendingApproval, Notification,
-  DashboardStats, MonthlyData, WeeklyData,OriginalAgent,OriginalUser
+  DashboardStats, MonthlyData, WeeklyData, OriginalAgent, OriginalUser
 } from '@/types';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -97,7 +97,7 @@ const convertAgent = (doc: any): OriginalAgent => {
     aadharUrl: data.aadharUrl,
     primaryImageUrl: data.primaryImageUrl,
     profileImageUrl: data.profileImageUrl,
-   
+
   };
 };
 type UpdateAmountPayload = {
@@ -111,44 +111,113 @@ type UpdateAmountPayload = {
 
 // ─── API Functions ──────────────────────────────────────────────────────────
 export const firebaseApi = {
-functions: getFunctions(),
+  functions: getFunctions(),
 
-createAgentWithAuth: async (data: {
-  agentEmail: string;
-  tempPassword: string;
-  agentName: string;
-  agentMobile: string;
-  agentAddress: string;
-  agentCity: string;
-  agentState: string;
-  agentPincode: string;
-  agentAadhar: string;
-  agentLicenseNumber: string;
-  aadharUrl?: string;
-  primaryImageUrl?: string;
-  profileImageUrl?: string;
-  isApproved?: boolean;
-  isRejected?: boolean;
-  role?: string;
-  platform?: string;
-  registrationDate?: string;
-}) => {
-  try {
-    const fn = httpsCallable(firebaseApi.functions, "createAgentWithAuth");
+  createAgentWithAuth: async (data: {
+    agentEmail: string;
+    tempPassword: string;
+    agentName: string;
+    agentMobile: string;
+    agentAddress: string;
+    agentCity: string;
+    agentState: string;
+    agentPincode: string;
+    agentAadhar: string;
+    agentLicenseNumber: string;
+    aadharUrl?: string;
+    primaryImageUrl?: string;
+    profileImageUrl?: string;
+    isApproved?: boolean;
+    isRejected?: boolean;
+    role?: string;
+    platform?: string;
+    registrationDate?: string;
+  }) => {
+    try {
+      // ─── Step 1: Create Firebase Auth user via REST API ───────────────────
+      // This creates the login account without signing out the current admin
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+      if (!apiKey) throw new Error('Firebase API key is missing from environment variables');
 
-    const res = await fn(data);
+      const authResponse = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: data.agentEmail,
+            password: data.tempPassword,
+            returnSecureToken: false, // Don't return a token — we just want the UID
+          }),
+        }
+      );
 
-    return res.data as {
-      success: boolean;
-      uid: string;
-    };
-  } catch (error) {
-    console.error("❌ createAgentWithAuth error:", error);
-    throw error;
-  }
-},
+      const authResult = await authResponse.json();
 
-// Users
+      if (!authResponse.ok || authResult.error) {
+        const errorMsg = authResult.error?.message || 'Failed to create Firebase Auth account';
+        console.error('❌ Firebase Auth creation failed:', authResult.error);
+        throw new Error(errorMsg);
+      }
+
+      const uid = authResult.localId; // The Firebase Auth UID
+      console.log('✅ Firebase Auth user created:', uid);
+
+      // ─── Step 2: Generate unique agentId ──────────────────────────────────
+      const generateUniqueAgentId = async (): Promise<string> => {
+        let agentId = '';
+        let exists = true;
+        while (exists) {
+          agentId = Math.floor(10000 + Math.random() * 9000000).toString();
+          const snap = await getDocs(
+            query(collection(db, 'agents'), where('agentId', '==', agentId), limit(1))
+          );
+          exists = !snap.empty;
+        }
+        return agentId;
+      };
+
+      const agentId = await generateUniqueAgentId();
+
+      // ─── Step 3: Save agent data to Firestore using Auth UID ──────────────
+      const agentRef = doc(db, 'agents', uid); // Use Auth UID as the document ID
+
+      const agentData = {
+        uid,
+        agentId,
+        agentAuthId: uid,
+        agentEmail: data.agentEmail,
+        agentName: data.agentName,
+        agentMobile: data.agentMobile,
+        agentAddress: data.agentAddress,
+        agentCity: data.agentCity,
+        agentState: data.agentState,
+        agentPincode: data.agentPincode,
+        agentAadhar: data.agentAadhar,
+        agentLicenseNumber: data.agentLicenseNumber || '',
+        aadharUrl: data.aadharUrl || '',
+        primaryImageUrl: data.primaryImageUrl || '',
+        profileImageUrl: data.profileImageUrl || '',
+        role: data.role || 'agent',
+        platform: data.platform || 'admin_panel',
+        isApproved: data.isApproved ?? false,
+        isRejected: data.isRejected ?? false,
+        registrationDate: data.registrationDate || new Date().toISOString(),
+        tempPassword: data.tempPassword, // Store so admin can share it with agent
+      };
+
+      await setDoc(agentRef, agentData);
+
+      console.log('✅ Agent saved to Firestore:', uid);
+
+      return { success: true, uid };
+    } catch (error) {
+      console.error('❌ createAgentWithAuth error:', error);
+      throw error;
+    }
+  },
+
+  // Users
   getUsers: async (filters?: {
     gender?: string;
     state?: string;
@@ -158,148 +227,148 @@ createAgentWithAuth: async (data: {
   }): Promise<OriginalUser[]> => {
     let usersRef = collection(db, 'users');
     let constraints = [];
-    
+
     if (filters?.agentId && filters.agentId !== 'All') {
       constraints.push(where('agentId', '==', filters.agentId));
     }
-    
+
     if (filters?.gender && filters.gender !== 'All') {
       constraints.push(where('gender', '==', filters.gender.toLowerCase()));
     }
-    
+
     const q = constraints.length > 0 ? query(usersRef, ...constraints) : usersRef;
     const snapshot = await getDocs(q);
-    
+
     let users = snapshot.docs.map(convertUser);
-    
+
     // Client-side filtering for fields not in Firebase
     if (filters?.search) {
       const s = filters.search.toLowerCase();
-      users = users.filter(u => 
-        u.fullName.toLowerCase().includes(s) || 
-        u.phone.includes(s) || 
+      users = users.filter(u =>
+        u.fullName.toLowerCase().includes(s) ||
+        u.phone.includes(s) ||
         u.uid.toLowerCase().includes(s)
       );
     }
-    
+
     return users;
   },
 
-getUsersPaginated: async (filters?: {
-  gender?: string;
-  state?: string;
-  status?: string;
-  agentId?: string;
-  search?: string;
-  pageSize?: number;
-  lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
-}): Promise<{
-  users: OriginalUser[];
-  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
-}> => {
-  try {
+  getUsersPaginated: async (filters?: {
+    gender?: string;
+    state?: string;
+    status?: string;
+    agentId?: string;
+    search?: string;
+    pageSize?: number;
+    lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
+  }): Promise<{
+    users: OriginalUser[];
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  }> => {
+    try {
+      const usersRef = collection(db, "users");
+      const pageSize = filters?.pageSize || 10;
+
+      let constraints: any[] = [];
+
+      // console.log("🔥 Incoming Filters:", filters);
+
+      // ✅ Always add orderBy FIRST (important for pagination)
+      constraints.push(orderBy("createdAt", "desc"));
+
+      // ✅ Filters
+      if (filters?.agentId && filters.agentId !== "All") {
+        constraints.push(where("agentId", "==", filters.agentId));
+      }
+
+      if (filters?.gender && filters.gender !== "All") {
+        constraints.push(where("gender", "==", filters.gender.toLowerCase()));
+      }
+
+      // ✅ Pagination
+      if (filters?.lastDoc) {
+        // console.log("➡️ Using lastDoc for pagination:", filters.lastDoc.id);
+        constraints.push(startAfter(filters.lastDoc));
+      }
+
+      constraints.push(limit(pageSize));
+
+      // ✅ Build query
+      const q = query(usersRef, ...constraints);
+
+      // console.log("📡 Firestore Query Constraints:", constraints);
+
+      const snapshot = await getDocs(q);
+
+      // console.log("📊 Raw Docs Count:", snapshot.docs.length);
+
+      let users = snapshot.docs.map(convertUser);
+
+      // ✅ Client-side search
+      if (filters?.search?.trim()) {
+        const searchTerm = filters.search.toLowerCase().trim();
+
+        users = users.filter((u) =>
+          u.fullName?.toLowerCase().includes(searchTerm) ||
+          u.phone?.includes(searchTerm) ||
+          u.uid?.toLowerCase().includes(searchTerm) ||
+          u.email?.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      // ✅ FIX: Always take lastDoc from snapshot (NOT based on filtered users)
+      const newLastDoc =
+        snapshot.docs.length > 0
+          ? snapshot.docs[snapshot.docs.length - 1]
+          : null;
+
+      // console.log("✅ Final Output:", {
+      //   returnedUsers: users.length,
+      //   nextPageAvailable: snapshot.docs.length === pageSize,
+      //   lastDocId: newLastDoc?.id || null,
+      // });
+
+      return {
+        users,
+        lastDoc: newLastDoc,
+      };
+    } catch (error: any) {
+      console.error("❌ Firestore Error:", error);
+
+      // 🔥 VERY IMPORTANT: shows index error
+      if (error.code === "failed-precondition") {
+        console.error("🚨 Missing Index! Create it from this link:");
+        console.error(error.message);
+      }
+
+      throw error;
+    }
+  },
+  getUsersStats: async () => {
     const usersRef = collection(db, "users");
-    const pageSize = filters?.pageSize || 10;
 
-    let constraints: any[] = [];
+    const totalSnap = await getCountFromServer(usersRef);
 
-    // console.log("🔥 Incoming Filters:", filters);
+    const maleSnap = await getCountFromServer(
+      query(usersRef, where("gender", "==", "male"))
+    );
 
-    // ✅ Always add orderBy FIRST (important for pagination)
-    constraints.push(orderBy("createdAt", "desc"));
+    const femaleSnap = await getCountFromServer(
+      query(usersRef, where("gender", "==", "female"))
+    );
 
-    // ✅ Filters
-    if (filters?.agentId && filters.agentId !== "All") {
-      constraints.push(where("agentId", "==", filters.agentId));
-    }
-
-    if (filters?.gender && filters.gender !== "All") {
-      constraints.push(where("gender", "==", filters.gender.toLowerCase()));
-    }
-
-    // ✅ Pagination
-    if (filters?.lastDoc) {
-      // console.log("➡️ Using lastDoc for pagination:", filters.lastDoc.id);
-      constraints.push(startAfter(filters.lastDoc));
-    }
-
-    constraints.push(limit(pageSize));
-
-    // ✅ Build query
-    const q = query(usersRef, ...constraints);
-
-    // console.log("📡 Firestore Query Constraints:", constraints);
-
-    const snapshot = await getDocs(q);
-
-    // console.log("📊 Raw Docs Count:", snapshot.docs.length);
-
-    let users = snapshot.docs.map(convertUser);
-
-    // ✅ Client-side search
-    if (filters?.search?.trim()) {
-      const searchTerm = filters.search.toLowerCase().trim();
-
-      users = users.filter((u) =>
-        u.fullName?.toLowerCase().includes(searchTerm) ||
-        u.phone?.includes(searchTerm) ||
-        u.uid?.toLowerCase().includes(searchTerm) ||
-        u.email?.toLowerCase().includes(searchTerm)
-      );
-    }
-
-    // ✅ FIX: Always take lastDoc from snapshot (NOT based on filtered users)
-    const newLastDoc =
-      snapshot.docs.length > 0
-        ? snapshot.docs[snapshot.docs.length - 1]
-        : null;
-
-    // console.log("✅ Final Output:", {
-    //   returnedUsers: users.length,
-    //   nextPageAvailable: snapshot.docs.length === pageSize,
-    //   lastDocId: newLastDoc?.id || null,
-    // });
+    const profileSnap = await getCountFromServer(
+      query(usersRef, where("isProfileCreated", "==", true))
+    );
 
     return {
-      users,
-      lastDoc: newLastDoc,
+      total: totalSnap.data().count,
+      male: maleSnap.data().count,
+      female: femaleSnap.data().count,
+      profileCreated: profileSnap.data().count,
     };
-  } catch (error: any) {
-    console.error("❌ Firestore Error:", error);
-
-    // 🔥 VERY IMPORTANT: shows index error
-    if (error.code === "failed-precondition") {
-      console.error("🚨 Missing Index! Create it from this link:");
-      console.error(error.message);
-    }
-
-    throw error;
-  }
-},
-getUsersStats: async () => {
-  const usersRef = collection(db, "users");
-
-  const totalSnap = await getCountFromServer(usersRef);
-
-  const maleSnap = await getCountFromServer(
-    query(usersRef, where("gender", "==", "male"))
-  );
-
-  const femaleSnap = await getCountFromServer(
-    query(usersRef, where("gender", "==", "female"))
-  );
-
-  const profileSnap = await getCountFromServer(
-    query(usersRef, where("isProfileCreated", "==", true))
-  );
-
-  return {
-    total: totalSnap.data().count,
-    male: maleSnap.data().count,
-    female: femaleSnap.data().count,
-    profileCreated: profileSnap.data().count,
-  };
-},
+  },
 
   getUser: async (uid: string): Promise<OriginalUser | null> => {
     const userRef = doc(db, 'users', uid);
@@ -307,41 +376,41 @@ getUsersStats: async () => {
     return snapshot.exists() ? convertUser(snapshot) : null;
   },
 
-updateUser: async (id: string, data: Partial<OriginalUser>): Promise<void> => {
-  try {
-    const docRef = doc(db, 'users', id);
+  updateUser: async (id: string, data: Partial<OriginalUser>): Promise<void> => {
+    try {
+      const docRef = doc(db, 'users', id);
 
-    // 🔥 Remove undefined fields
-    const cleanData = Object.fromEntries(
-      Object.entries(data).filter(([_, v]) => v !== undefined)
-    );
+      // 🔥 Remove undefined fields
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, v]) => v !== undefined)
+      );
 
-    // ❗ Prevent empty update
-    if (Object.keys(cleanData).length === 0) {
-      console.warn("⚠️ No valid fields to update");
-      return;
+      // ❗ Prevent empty update
+      if (Object.keys(cleanData).length === 0) {
+        console.warn("⚠️ No valid fields to update");
+        return;
+      }
+
+      // console.log("🔥 Updating user:", {
+      //   id,
+      //   cleanData
+      // });
+
+      await updateDoc(docRef, cleanData);
+
+      console.log("✅ User updated successfully:", id);
+
+    } catch (error: any) {
+      console.error("❌ Update failed:", {
+        message: error?.message,
+        code: error?.code,
+        fullError: error
+      });
+
+      // 🔥 Optional: rethrow for React Query
+      throw error;
     }
-
-    // console.log("🔥 Updating user:", {
-    //   id,
-    //   cleanData
-    // });
-
-    await updateDoc(docRef, cleanData);
-
-    console.log("✅ User updated successfully:", id);
-
-  } catch (error: any) {
-    console.error("❌ Update failed:", {
-      message: error?.message,
-      code: error?.code,
-      fullError: error
-    });
-
-    // 🔥 Optional: rethrow for React Query
-    throw error;
-  }
-},
+  },
 
   // Agents
   getAgents: async (): Promise<OriginalAgent[]> => {
@@ -416,7 +485,7 @@ updateUser: async (id: string, data: Partial<OriginalUser>): Promise<void> => {
     }
   },
 
-getAgentsPaginated: async (filters?: {
+  getAgentsPaginated: async (filters?: {
     search?: string;
     pageSize?: number;
     lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
@@ -473,25 +542,25 @@ getAgentsPaginated: async (filters?: {
     }
   },
 
-getAgent: async (uid: string): Promise<OriginalAgent | null> => {
+  getAgent: async (uid: string): Promise<OriginalAgent | null> => {
     const agentRef = doc(db, 'agents', uid);
     const snapshot = await getDoc(agentRef);
     return snapshot.exists() ? convertAgent(snapshot) : null;
   },
 
   createAgent: async (data: Omit<OriginalAgent, 'uid'>): Promise<void> => {
-  const ref = doc(collection(db, 'agents')); // auto ID
+    const ref = doc(collection(db, 'agents')); // auto ID
 
-  const finalData = {
-    ...data,
+    const finalData = {
+      ...data,
 
-    agentId: ref.id,      // 🔥 same as doc id
+      agentId: ref.id,      // 🔥 same as doc id
 
-    
-  };
 
-  await setDoc(ref, finalData);
-},
+    };
+
+    await setDoc(ref, finalData);
+  },
 
   getAgentByCustomId: async (agentId: string): Promise<OriginalAgent | null> => {
     const agentsRef = collection(db, 'agents');
@@ -521,28 +590,28 @@ getAgent: async (uid: string): Promise<OriginalAgent | null> => {
 
 
   updateAgent: async (
-  uid: string,
-  data: Partial<OriginalAgent>
-): Promise<void> => {
-  try {
-    const docRef = doc(db, "agents", uid);
+    uid: string,
+    data: Partial<OriginalAgent>
+  ): Promise<void> => {
+    try {
+      const docRef = doc(db, "agents", uid);
 
-    // 🔥 Remove undefined values (VERY IMPORTANT)
-    const cleanData = Object.fromEntries(
-      Object.entries(data).filter(([_, v]) => v !== undefined)
-    );
+      // 🔥 Remove undefined values (VERY IMPORTANT)
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, v]) => v !== undefined)
+      );
 
-    console.log("Updating agent:", uid, cleanData);
+      console.log("Updating agent:", uid, cleanData);
 
-    await updateDoc(docRef, cleanData);
+      await updateDoc(docRef, cleanData);
 
-    console.log("Agent updated successfully ✅");
+      console.log("Agent updated successfully ✅");
 
-  } catch (error) {
-    console.error("Error updating agent ❌:", error);
-    throw error;
-  }
-},
+    } catch (error) {
+      console.error("Error updating agent ❌:", error);
+      throw error;
+    }
+  },
 
 
   deleteAgent: async (uid: string): Promise<void> => {
@@ -556,378 +625,378 @@ getAgent: async (uid: string): Promise<OriginalAgent | null> => {
     }
   },
 
-// Payments
-getPaymentsPaginated: async (filters?: {
-  agentId?: string;
-  status?: string;
-  paymentType?: string;
-  search?: string;
-  pageSize?: number;
-  lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
-}): Promise<{
-  payments: any[];
-  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
-}> => {
-  try {
-    const paymentsRef = collection(db, "payments");
+  // Payments
+  getPaymentsPaginated: async (filters?: {
+    agentId?: string;
+    status?: string;
+    paymentType?: string;
+    search?: string;
+    pageSize?: number;
+    lastDoc?: QueryDocumentSnapshot<DocumentData> | null;
+  }): Promise<{
+    payments: any[];
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  }> => {
+    try {
+      const paymentsRef = collection(db, "payments");
 
-    const pageSize = filters?.pageSize || 10;
-    let constraints: any[] = [];
+      const pageSize = filters?.pageSize || 10;
+      let constraints: any[] = [];
 
-    // ✅ IMPORTANT: orderBy required for pagination
-    constraints.push(orderBy("createdAt", "desc"));
+      // ✅ IMPORTANT: orderBy required for pagination
+      constraints.push(orderBy("createdAt", "desc"));
 
-    // ✅ Filter by agentId
-    if (filters?.agentId && filters.agentId !== "All") {
-      constraints.push(where("agentId", "==", filters.agentId));
-    }
-
-    // ✅ Filter by status
-    if (filters?.status && filters.status !== "All") {
-      constraints.push(where("status", "==", filters.status));
-    }
-
-    // ✅ Filter by paymentType
-    if (filters?.paymentType && filters.paymentType !== "All") {
-      constraints.push(where("paymentType", "==", filters.paymentType));
-    }
-
-    // ✅ Pagination
-    if (filters?.lastDoc) {
-      constraints.push(startAfter(filters.lastDoc));
-    }
-
-    constraints.push(limit(pageSize));
-
-    const q = query(paymentsRef, ...constraints);
-
-    const snapshot = await getDocs(q);
-
-    let payments = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    // ✅ Client-side search
-    if (filters?.search?.trim()) {
-      const s = filters.search.toLowerCase();
-
-      payments = payments.filter((p: any) =>
-        p.fullName?.toLowerCase().includes(s) ||
-        p.phone?.includes(s) ||
-        p.email?.toLowerCase().includes(s) ||
-        p.orderId?.toLowerCase().includes(s)
-      );
-    }
-
-    const newLastDoc =
-      snapshot.docs.length > 0
-        ? snapshot.docs[snapshot.docs.length - 1]
-        : null;
-
-    return {
-      payments,
-      lastDoc: newLastDoc,
-    };
-  } catch (error: any) {
-    console.error("❌ Error fetching payments:", error);
-
-    // 🔥 Handle index error (very common in Firestore)
-    if (error.code === "failed-precondition") {
-      console.error("🚨 Missing Firestore Index:");
-      console.error(error.message);
-    }
-
-    throw error;
-  }
-},
-getPaymentsSummary: async (filters?: {
-  agentId?: string;
-}): Promise<{
-  totalRevenue: number;
-  paidCount: number;
-  pendingCount: number;
-  failedCount: number;
-  totalOrders: number;
-}> => {
-  try {
-    const paymentsRef = collection(db, "payments");
-
-    let constraints: any[] = [];
-
-    // ✅ Filter by agentId
-    if (filters?.agentId && filters.agentId !== "All") {
-      constraints.push(where("agentId", "==", filters.agentId));
-    }
-
-    const q =
-      constraints.length > 0
-        ? query(paymentsRef, ...constraints)
-        : paymentsRef;
-
-    const snapshot = await getDocs(q);
-
-    let totalRevenue = 0;
-    let paidCount = 0;
-    let pendingCount = 0;
-    let failedCount = 0;
-
-    snapshot.docs.forEach((doc) => {
-      const data = doc.data();
-
-      if (data.status === "Paid") {
-        totalRevenue += data.amount || 0;
-        paidCount++;
-      } else if (data.status === "PENDING") {
-        pendingCount++;
-      } else if (data.status === "Failed") {
-        failedCount++;
+      // ✅ Filter by agentId
+      if (filters?.agentId && filters.agentId !== "All") {
+        constraints.push(where("agentId", "==", filters.agentId));
       }
-    });
 
-    return {
-      totalRevenue,
-      paidCount,
-      pendingCount,
-      failedCount,
-      totalOrders: snapshot.size,
-    };
-  } catch (error) {
-    console.error("❌ Error fetching payments summary:", error);
-    throw error;
-  }
-},
+      // ✅ Filter by status
+      if (filters?.status && filters.status !== "All") {
+        constraints.push(where("status", "==", filters.status));
+      }
 
+      // ✅ Filter by paymentType
+      if (filters?.paymentType && filters.paymentType !== "All") {
+        constraints.push(where("paymentType", "==", filters.paymentType));
+      }
 
-getDashboardCounts: async (): Promise<{
-  totalUsers: number;
-  totalMale: number;
-  totalFemale: number;
-  totalAgents: number;
-}> => {
-  try {
-    const usersRef = collection(db, "users");
-    const agentsRef = collection(db, "agents");
+      // ✅ Pagination
+      if (filters?.lastDoc) {
+        constraints.push(startAfter(filters.lastDoc));
+      }
 
-    // ✅ Parallel queries (faster 🚀)
-    const [
-      totalUsersSnap,
-      maleSnap,
-      femaleSnap,
-      agentsSnap
-    ] = await Promise.all([
-      getCountFromServer(usersRef),
+      constraints.push(limit(pageSize));
 
-      getCountFromServer(
-        query(usersRef, where("gender", "==", "male"))
-      ),
+      const q = query(paymentsRef, ...constraints);
 
-      getCountFromServer(
-        query(usersRef, where("gender", "==", "female"))
-      ),
+      const snapshot = await getDocs(q);
 
-      getCountFromServer(agentsRef)
-    ]);
+      let payments = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-    return {
-      totalUsers: totalUsersSnap.data().count,
-      totalMale: maleSnap.data().count,
-      totalFemale: femaleSnap.data().count,
-      totalAgents: agentsSnap.data().count,
-    };
-  } catch (error) {
-    console.error("❌ Error fetching dashboard counts:", error);
-    throw error;
-  }
-},
+      // ✅ Client-side search
+      if (filters?.search?.trim()) {
+        const s = filters.search.toLowerCase();
 
-// Send bulk notification using Firebase Function
-sendBulkNotification: async (data: {
-  target: string;
-  title: string;
-  message: string;
-}): Promise<{ success: boolean; sentCount: number; totalUsers: number }> => {
-  try {
-    const sendNotification = httpsCallable(firebaseApi.functions, 'sendBulkNotification');
-    const result = await sendNotification(data);
-    return result.data as { success: boolean; sentCount: number; totalUsers: number };
-  } catch (error: any) {
-    console.error("❌ Error sending notification:", error);
-    throw error;
-  }
-},
+        payments = payments.filter((p: any) =>
+          p.fullName?.toLowerCase().includes(s) ||
+          p.phone?.includes(s) ||
+          p.email?.toLowerCase().includes(s) ||
+          p.orderId?.toLowerCase().includes(s)
+        );
+      }
 
-// Get all notifications using Firebase Function
-getAllNotifications: async (filters?: {
-  target?: string;
-  status?: string;
-  limit?: number;
-  lastDocId?: string;
-}): Promise<{
-  notifications: any[];
-  lastDocId: string | null;
-}> => {
-  try {
-    const getNotifications = httpsCallable(firebaseApi.functions, 'getAllNotifications');
-    const result = await getNotifications(filters || {});
-    return result.data as { notifications: any[]; lastDocId: string | null };
-  } catch (error: any) {
-    console.error("❌ Error fetching notifications:", error);
-    throw error;
-  }
-},
+      const newLastDoc =
+        snapshot.docs.length > 0
+          ? snapshot.docs[snapshot.docs.length - 1]
+          : null;
 
-// Get user profile from metrimony_profiles collection
-getUserProfile: async (userId: string): Promise<any | null> => {
-  try {
-    const profileRef = doc(db, 'metrimony_profiles', userId);
-    const snapshot = await getDoc(profileRef);
-    return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
-  } catch (error) {
-    console.error("❌ Error fetching user profile:", error);
-    throw error;
-  }
-},
-// Get users with their profiles (joined data)
-getUsersWithProfiles: async (filters?: {
-  gender?: string;
-  state?: string;
-  agentId?: string;
-  search?: string;
-}): Promise<any[]> => {
-  try {
-    let usersRef = collection(db, 'users');
-    let constraints: any[] = [];
+      return {
+        payments,
+        lastDoc: newLastDoc,
+      };
+    } catch (error: any) {
+      console.error("❌ Error fetching payments:", error);
 
-    // ✅ Filters
-    if (filters?.agentId && filters.agentId !== 'All') {
-      constraints.push(where('agentId', '==', filters.agentId));
+      // 🔥 Handle index error (very common in Firestore)
+      if (error.code === "failed-precondition") {
+        console.error("🚨 Missing Firestore Index:");
+        console.error(error.message);
+      }
+
+      throw error;
     }
+  },
+  getPaymentsSummary: async (filters?: {
+    agentId?: string;
+  }): Promise<{
+    totalRevenue: number;
+    paidCount: number;
+    pendingCount: number;
+    failedCount: number;
+    totalOrders: number;
+  }> => {
+    try {
+      const paymentsRef = collection(db, "payments");
 
-    if (filters?.gender && filters.gender !== 'All') {
-      constraints.push(where('gender', '==', filters.gender.toLowerCase()));
+      let constraints: any[] = [];
+
+      // ✅ Filter by agentId
+      if (filters?.agentId && filters.agentId !== "All") {
+        constraints.push(where("agentId", "==", filters.agentId));
+      }
+
+      const q =
+        constraints.length > 0
+          ? query(paymentsRef, ...constraints)
+          : paymentsRef;
+
+      const snapshot = await getDocs(q);
+
+      let totalRevenue = 0;
+      let paidCount = 0;
+      let pendingCount = 0;
+      let failedCount = 0;
+
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+
+        if (data.status === "Paid") {
+          totalRevenue += data.amount || 0;
+          paidCount++;
+        } else if (data.status === "PENDING") {
+          pendingCount++;
+        } else if (data.status === "Failed") {
+          failedCount++;
+        }
+      });
+
+      return {
+        totalRevenue,
+        paidCount,
+        pendingCount,
+        failedCount,
+        totalOrders: snapshot.size,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching payments summary:", error);
+      throw error;
     }
+  },
 
-    // ✅ ORDER BY (latest first)
-    constraints.push(orderBy('createdAt', 'desc'));
 
-    // 🔥 Build query
-    const q = query(usersRef, ...constraints);
-    const userSnapshot = await getDocs(q);
-    const users = userSnapshot.docs.map(convertUser);
+  getDashboardCounts: async (): Promise<{
+    totalUsers: number;
+    totalMale: number;
+    totalFemale: number;
+    totalAgents: number;
+  }> => {
+    try {
+      const usersRef = collection(db, "users");
+      const agentsRef = collection(db, "agents");
 
-    // 🔥 Get profiles
-    const usersWithProfiles = await Promise.all(
-      users.map(async (user) => {
-        const profile = await firebaseApi.getUserProfile(user.uid);
+      // ✅ Parallel queries (faster 🚀)
+      const [
+        totalUsersSnap,
+        maleSnap,
+        femaleSnap,
+        agentsSnap
+      ] = await Promise.all([
+        getCountFromServer(usersRef),
 
-        return {
-          ...user,
-          profile: profile || null,
-          profileDetails: profile ? {
-            caste: profile.cultural?.caste,
-            religion: profile.cultural?.religion,
-            education: profile.education?.education?.course,
-            occupation: profile.employment?.designation,
-            annualIncome: profile.employment?.annualIncome,
-            age: profile.identity?.age,
-            dob: profile.identity?.dob,
-            height: profile.physical?.height,
-            weight: profile.physical?.weight,
-            bodyType: profile.physical?.bodyType,
-            complexion: profile.physical?.complexion,
-            familyType: profile.family?.familyType,
-            familyStatus: profile.family?.familyStatus,
-            aboutMe: profile.identity?.aboutMe,
-            profileStatus: profile.profileStatus,
-            images: profile.images,
-          } : null
-        };
-      })
-    );
+        getCountFromServer(
+          query(usersRef, where("gender", "==", "male"))
+        ),
 
-    // 🔍 Client-side search
-    let result = usersWithProfiles;
-    if (filters?.search) {
-      const s = filters.search.toLowerCase();
-      result = result.filter(u => 
-        u.fullName.toLowerCase().includes(s) || 
-        u.phone.includes(s) || 
-        u.uid.toLowerCase().includes(s)
+        getCountFromServer(
+          query(usersRef, where("gender", "==", "female"))
+        ),
+
+        getCountFromServer(agentsRef)
+      ]);
+
+      return {
+        totalUsers: totalUsersSnap.data().count,
+        totalMale: maleSnap.data().count,
+        totalFemale: femaleSnap.data().count,
+        totalAgents: agentsSnap.data().count,
+      };
+    } catch (error) {
+      console.error("❌ Error fetching dashboard counts:", error);
+      throw error;
+    }
+  },
+
+  // Send bulk notification using Firebase Function
+  sendBulkNotification: async (data: {
+    target: string;
+    title: string;
+    message: string;
+  }): Promise<{ success: boolean; sentCount: number; totalUsers: number }> => {
+    try {
+      const sendNotification = httpsCallable(firebaseApi.functions, 'sendBulkNotification');
+      const result = await sendNotification(data);
+      return result.data as { success: boolean; sentCount: number; totalUsers: number };
+    } catch (error: any) {
+      console.error("❌ Error sending notification:", error);
+      throw error;
+    }
+  },
+
+  // Get all notifications using Firebase Function
+  getAllNotifications: async (filters?: {
+    target?: string;
+    status?: string;
+    limit?: number;
+    lastDocId?: string;
+  }): Promise<{
+    notifications: any[];
+    lastDocId: string | null;
+  }> => {
+    try {
+      const getNotifications = httpsCallable(firebaseApi.functions, 'getAllNotifications');
+      const result = await getNotifications(filters || {});
+      return result.data as { notifications: any[]; lastDocId: string | null };
+    } catch (error: any) {
+      console.error("❌ Error fetching notifications:", error);
+      throw error;
+    }
+  },
+
+  // Get user profile from metrimony_profiles collection
+  getUserProfile: async (userId: string): Promise<any | null> => {
+    try {
+      const profileRef = doc(db, 'metrimony_profiles', userId);
+      const snapshot = await getDoc(profileRef);
+      return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+    } catch (error) {
+      console.error("❌ Error fetching user profile:", error);
+      throw error;
+    }
+  },
+  // Get users with their profiles (joined data)
+  getUsersWithProfiles: async (filters?: {
+    gender?: string;
+    state?: string;
+    agentId?: string;
+    search?: string;
+  }): Promise<any[]> => {
+    try {
+      let usersRef = collection(db, 'users');
+      let constraints: any[] = [];
+
+      // ✅ Filters
+      if (filters?.agentId && filters.agentId !== 'All') {
+        constraints.push(where('agentId', '==', filters.agentId));
+      }
+
+      if (filters?.gender && filters.gender !== 'All') {
+        constraints.push(where('gender', '==', filters.gender.toLowerCase()));
+      }
+
+      // ✅ ORDER BY (latest first)
+      constraints.push(orderBy('createdAt', 'desc'));
+
+      // 🔥 Build query
+      const q = query(usersRef, ...constraints);
+      const userSnapshot = await getDocs(q);
+      const users = userSnapshot.docs.map(convertUser);
+
+      // 🔥 Get profiles
+      const usersWithProfiles = await Promise.all(
+        users.map(async (user) => {
+          const profile = await firebaseApi.getUserProfile(user.uid);
+
+          return {
+            ...user,
+            profile: profile || null,
+            profileDetails: profile ? {
+              caste: profile.cultural?.caste,
+              religion: profile.cultural?.religion,
+              education: profile.education?.education?.course,
+              occupation: profile.employment?.designation,
+              annualIncome: profile.employment?.annualIncome,
+              age: profile.identity?.age,
+              dob: profile.identity?.dob,
+              height: profile.physical?.height,
+              weight: profile.physical?.weight,
+              bodyType: profile.physical?.bodyType,
+              complexion: profile.physical?.complexion,
+              familyType: profile.family?.familyType,
+              familyStatus: profile.family?.familyStatus,
+              aboutMe: profile.identity?.aboutMe,
+              profileStatus: profile.profileStatus,
+              images: profile.images,
+            } : null
+          };
+        })
       );
+
+      // 🔍 Client-side search
+      let result = usersWithProfiles;
+      if (filters?.search) {
+        const s = filters.search.toLowerCase();
+        result = result.filter(u =>
+          u.fullName.toLowerCase().includes(s) ||
+          u.phone.includes(s) ||
+          u.uid.toLowerCase().includes(s)
+        );
+      }
+
+      return result;
+
+    } catch (error) {
+      console.error("❌ Error fetching users with profiles:", error);
+      throw error;
     }
+  },
 
-    return result;
+  getAmounts: async () => {
+    const snap = await getDocs(collection(db, "amounts"));
 
-  } catch (error) {
-    console.error("❌ Error fetching users with profiles:", error);
-    throw error;
-  }
-},
+    const data: Record<string, any> = {};
 
-getAmounts: async () => {
-  const snap = await getDocs(collection(db, "amounts"));
-
-  const data: Record<string, any> = {};
-
-  snap.docs.forEach(doc => {
-    data[doc.id] = doc.data();
-  });
-
-  return data;
-},
-// updateAmount: async ({
-//   id,
-//   data,
-// }: {
-//   id: string;
-//   data: any;
-// }) => {
-//   const ref = doc(db, "amounts", id);
-
-//   // 🔥 remove undefined
-//   const cleanData = Object.fromEntries(
-//     Object.entries(data).filter(([_, v]) => v !== undefined)
-//   );
-
-//   await updateDoc(ref, cleanData);
-
-//   return true;
-// },
-
-updateAmount :async ({
-  id,
-  data,
-}: UpdateAmountPayload): Promise<boolean> => {
-  try {
-    const ref = doc(db, "amounts", id);
-
-    // 🔥 Remove undefined values
-    const cleanData = Object.fromEntries(
-      Object.entries(data).filter(([_, v]) => v !== undefined)
-    );
-
-    if (Object.keys(cleanData).length === 0) {
-      console.warn("⚠️ No valid fields to update");
-      return false;
-    }
-
-    // ✅ setDoc with merge → works for create + update
-    await setDoc(ref, cleanData, { merge: true });
-
-    console.log("✅ Amount updated:", id);
-
-    return true;
-  } catch (error: any) {
-    console.error("❌ Error updating amount:", {
-      message: error?.message,
-      code: error?.code,
-      fullError: error,
+    snap.docs.forEach(doc => {
+      data[doc.id] = doc.data();
     });
 
-    throw error; // important for React Query
-  }
-},
+    return data;
+  },
+  // updateAmount: async ({
+  //   id,
+  //   data,
+  // }: {
+  //   id: string;
+  //   data: any;
+  // }) => {
+  //   const ref = doc(db, "amounts", id);
+
+  //   // 🔥 remove undefined
+  //   const cleanData = Object.fromEntries(
+  //     Object.entries(data).filter(([_, v]) => v !== undefined)
+  //   );
+
+  //   await updateDoc(ref, cleanData);
+
+  //   return true;
+  // },
+
+  updateAmount: async ({
+    id,
+    data,
+  }: UpdateAmountPayload): Promise<boolean> => {
+    try {
+      const ref = doc(db, "amounts", id);
+
+      // 🔥 Remove undefined values
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, v]) => v !== undefined)
+      );
+
+      if (Object.keys(cleanData).length === 0) {
+        console.warn("⚠️ No valid fields to update");
+        return false;
+      }
+
+      // ✅ setDoc with merge → works for create + update
+      await setDoc(ref, cleanData, { merge: true });
+
+      console.log("✅ Amount updated:", id);
+
+      return true;
+    } catch (error: any) {
+      console.error("❌ Error updating amount:", {
+        message: error?.message,
+        code: error?.code,
+        fullError: error,
+      });
+
+      throw error; // important for React Query
+    }
+  },
 
 
 

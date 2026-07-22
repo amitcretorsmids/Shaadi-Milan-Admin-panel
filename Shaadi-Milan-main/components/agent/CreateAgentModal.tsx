@@ -61,6 +61,121 @@ const INITIAL_FORM: CreateAgentFormData = {
   profileImageUrl: '',
 };
 
+const TRANSLATIONS = {
+  en: {
+    title: 'Register New Agent',
+    profileCompletion: 'Profile Completion',
+    basicInfo: 'Basic Information',
+    documents: 'Documents & Verification',
+    personalInfo: '👤 Personal Information',
+    fullName: 'Full Name',
+    mobileNumber: 'Mobile Number',
+    emailAddress: 'Email Address',
+    loginCredentials: '🔐 Login Credentials',
+    tempPassword: 'Temporary Password',
+    generate: 'Generate',
+    passwordWarning: '⚠️ Save this password - it will be shared with the agent for first login',
+    addressInfo: '📍 Address Information',
+    streetAddress: 'Street Address',
+    state: 'State',
+    city: 'City',
+    pincode: 'Pincode',
+    profDetails: '🆔 Professional Details',
+    aadharNumber: 'Aadhar Number',
+    licenseNumber: 'License Number',
+    docUploads: '📄 Document Uploads',
+    aadharCard: 'Aadhar Card',
+    primaryId: 'Primary ID Document',
+    profileImage: 'Profile Image',
+    cancel: 'Cancel',
+    createAgent: 'Create Agent',
+    creatingAgent: 'Creating Agent...',
+    fixErrors: 'Please fix',
+    errorsBeforeSubmitting: 'error(s) before submitting',
+    required: 'Required',
+    optional: 'Optional',
+    maxSize: 'Max 5MB for files',
+    view: 'View',
+    remove: 'Remove',
+    uploadFile: 'Upload File',
+    provideUrl: 'Provide URL',
+    uploading: 'Uploading...',
+    uploadedSuccess: 'Uploaded successfully!',
+    clickToUpload: 'Click to upload',
+    addUrl: 'Add URL',
+    urlHelper: 'Enter the complete URL of the document (must start with https://)',
+    docRequiredMsg: '⚠️ This document is required',
+    linkedViaUrl: 'Document linked via URL',
+    uploadedSuccessfullyMsg: 'Document uploaded successfully',
+    
+    // Placeholders
+    phName: 'e.g., Amit Verma',
+    phMobile: '9123456780',
+    phEmail: 'agent@example.com',
+    phPassword: 'Enter or generate temporary password',
+    phAddress: 'House No 54, Civil Lines',
+    phPincode: '208001',
+    phAadhar: '4321-8765-2109',
+    phLicense: 'UP-MB-AGENT-2045'
+  },
+  hi: {
+    title: 'नया एजेंट पंजीकृत करें (Register New Agent)',
+    profileCompletion: 'प्रोफ़ाइल पूर्णता',
+    basicInfo: 'मूल जानकारी',
+    documents: 'दस्तावेज़ और सत्यापन',
+    personalInfo: '👤 व्यक्तिगत जानकारी',
+    fullName: 'पूरा नाम',
+    mobileNumber: 'मोबाइल नंबर',
+    emailAddress: 'ईमेल पता',
+    loginCredentials: '🔐 लॉगिन क्रेडेंशियल्स',
+    tempPassword: 'अस्थायी पासवर्ड',
+    generate: 'उत्पन्न करें',
+    passwordWarning: '⚠️ यह पासवर्ड सेव करें - यह एजेंट के पहले लॉगिन के लिए उपयोग किया जाएगा',
+    addressInfo: '📍 पता की जानकारी',
+    streetAddress: 'गली का पता',
+    state: 'राज्य',
+    city: 'शहर',
+    pincode: 'पिनकोड',
+    profDetails: '🆔 पेशेवर विवरण',
+    aadharNumber: 'आधार नंबर',
+    licenseNumber: 'लाइसेंस नंबर',
+    docUploads: '📄 दस्तावेज़ अपलोड',
+    aadharCard: 'आधार कार्ड',
+    primaryId: 'प्राथमिक आईडी दस्तावेज़',
+    profileImage: 'प्रोफ़ाइल छवि',
+    cancel: 'रद्द करें',
+    createAgent: 'एजेंट बनाएं',
+    creatingAgent: 'एजेंट बन रहा है...',
+    fixErrors: 'कृपया सबमिट करने से पहले',
+    errorsBeforeSubmitting: 'त्रुटि(यों) को ठीक करें',
+    required: 'आवश्यक',
+    optional: 'वैकल्पिक',
+    maxSize: 'फ़ाइलों के लिए अधिकतम 5MB',
+    view: 'देखें',
+    remove: 'हटाएं',
+    uploadFile: 'फ़ाइल अपलोड करें',
+    provideUrl: 'URL प्रदान करें',
+    uploading: 'अपलोड हो रहा है...',
+    uploadedSuccess: 'सफलतापूर्वक अपलोड किया गया!',
+    clickToUpload: 'अपलोड करने के लिए क्लिक करें',
+    addUrl: 'URL जोड़ें',
+    urlHelper: 'दस्तावेज़ का पूरा URL दर्ज करें (https:// से शुरू होना चाहिए)',
+    docRequiredMsg: '⚠️ यह दस्तावेज़ आवश्यक है',
+    linkedViaUrl: 'URL के माध्यम से दस्तावेज़ लिंक किया गया',
+    uploadedSuccessfullyMsg: 'दस्तावेज़ सफलतापूर्वक अपलोड किया गया',
+    
+    // Placeholders
+    phName: 'उदा., अमित वर्मा',
+    phMobile: '9123456780',
+    phEmail: 'agent@example.com',
+    phPassword: 'अस्थायी पासवर्ड दर्ज करें या उत्पन्न करें',
+    phAddress: 'मकान नंबर 54, सिविल लाइंस',
+    phPincode: '208001',
+    phAadhar: '4321-8765-2109',
+    phLicense: 'UP-MB-AGENT-2045'
+  }
+};
+
 const generateTempPassword = (): string => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$';
   let password = '';
@@ -149,6 +264,9 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
   onCreate,
   isCreating,
 }) => {
+  const [lang, setLang] = useState<'en' | 'hi'>('en');
+  const t = TRANSLATIONS[lang];
+
   const [formData, setFormData] = useState<CreateAgentFormData>(INITIAL_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -459,7 +577,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
             <div>
               <h4 className="font-medium text-[var(--text-primary)]">{label}</h4>
               <p className="text-xs text-[var(--text-dim)] mt-0.5">
-                {required ? 'Required' : 'Optional'} • Max 5MB for files
+                {required ? t.required : t.optional} • {t.maxSize}
               </p>
             </div>
           </div>
@@ -471,14 +589,14 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
                 rel="noopener noreferrer"
                 className="px-2 py-1 text-xs rounded-lg bg-[var(--bg-glass)] hover:bg-[var(--bg-hover)] transition-colors"
               >
-                View
+                {t.view}
               </a>
               <button
                 type="button"
                 onClick={() => handleRemoveDocument(fieldType)}
                 className="px-2 py-1 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
               >
-                Remove
+                {t.remove}
               </button>
             </div>
           )}
@@ -497,7 +615,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               }`}
             >
               <Upload className="w-3 h-3 inline mr-1" />
-              Upload File
+              {t.uploadFile}
             </button>
             <button
               type="button"
@@ -509,7 +627,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               }`}
             >
               <LinkIcon className="w-3 h-3 inline mr-1" />
-              Provide URL
+              {t.provideUrl}
             </button>
           </div>
         )}
@@ -536,17 +654,17 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               {uploadState.status === 'uploading' ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Uploading... {uploadState.progress}%</span>
+                  <span>{t.uploading} {uploadState.progress}%</span>
                 </>
               ) : uploadState.status === 'success' ? (
                 <>
                   <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span className="text-green-600">Uploaded successfully!</span>
+                  <span className="text-green-600">{t.uploadedSuccess}</span>
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  <span>Click to upload {label}</span>
+                  <span>{t.clickToUpload} {label}</span>
                 </>
               )}
             </button>
@@ -576,12 +694,12 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
                 {uploadState.status === 'uploading' ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  'Add URL'
+                  t.addUrl
                 )}
               </button>
             </div>
             <p className="text-xs text-[var(--text-dim)]">
-              Enter the complete URL of the document (must start with https://)
+              {t.urlHelper}
             </p>
           </div>
         )}
@@ -594,20 +712,20 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
         )}
         
         {!currentUrl && required && uploadState.status !== 'uploading' && (
-          <p className="text-xs text-amber-600 mt-2">⚠️ This document is required</p>
+          <p className="text-xs text-amber-600 mt-2">{t.docRequiredMsg}</p>
         )}
         
         {currentUrl && uploadState.uploadType === 'url' && (
           <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
-            Document linked via URL
+            {t.linkedViaUrl}
           </p>
         )}
         
         {currentUrl && uploadState.uploadType === 'file' && (
           <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
-            Document uploaded successfully
+            {t.uploadedSuccessfullyMsg}
           </p>
         )}
       </div>
@@ -707,12 +825,43 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
   const progressPercentage = (completedFields / totalRequiredFields) * 100;
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Register New Agent" size="xl">
+    <Modal 
+      isOpen={isOpen} 
+      onClose={handleClose} 
+      title={t.title} 
+      size="xl"
+      headerExtra={
+        <div className="flex items-center bg-[var(--bg-surface)] border border-[var(--border-light)] rounded-lg p-0.5 ml-2">
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+              lang === 'en' 
+                ? 'bg-[var(--bg-glass)] text-[var(--text-primary)] shadow-sm' 
+                : 'text-[var(--text-dim)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('hi')}
+            className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+              lang === 'hi' 
+                ? 'bg-[var(--bg-glass)] text-[var(--text-primary)] shadow-sm' 
+                : 'text-[var(--text-dim)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            हिं
+          </button>
+        </div>
+      }
+    >
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
         {/* Progress Bar */}
         <div className="mb-6">
           <div className="flex justify-between text-xs text-[var(--text-dim)] mb-2">
-            <span>Profile Completion</span>
+            <span>{t.profileCompletion}</span>
             <span>{Math.round(progressPercentage)}%</span>
           </div>
           <div className="h-2 bg-[var(--border-light)] rounded-full overflow-hidden">
@@ -736,7 +885,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               }
             `}
           >
-            Basic Information
+            {t.basicInfo}
             {activeSection === 'basic' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00c9a7]" />
             )}
@@ -752,7 +901,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               }
             `}
           >
-            Documents & Verification
+            {t.documents}
             {activeSection === 'documents' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00c9a7]" />
             )}
@@ -765,14 +914,14 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               {/* Personal Information Section */}
               <div className="bg-[var(--bg-surface)] rounded-xl p-5 border border-[var(--border-light)]">
                 <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                  👤 Personal Information
+                  {t.personalInfo}
                 </h3>
                 <div className="space-y-4">
-                  {renderInputField('Full Name', 'agentName', 'text', 'e.g., Amit Verma', true)}
+                  {renderInputField(t.fullName, 'agentName', 'text', t.phName, true)}
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderInputField('Mobile Number', 'agentMobile', 'tel', '9123456780', true)}
-                    {renderInputField('Email Address', 'agentEmail', 'email', 'agent@example.com', true)}
+                    {renderInputField(t.mobileNumber, 'agentMobile', 'tel', t.phMobile, true)}
+                    {renderInputField(t.emailAddress, 'agentEmail', 'email', t.phEmail, true)}
                   </div>
                 </div>
               </div>
@@ -780,12 +929,12 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               {/* Credentials Section */}
               <div className="bg-[var(--bg-surface)] rounded-xl p-5 border border-[var(--border-light)]">
                 <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                  🔐 Login Credentials
+                  {t.loginCredentials}
                 </h3>
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="block text-sm font-medium text-[var(--text-primary)]">
-                      Temporary Password <span className="text-red-500 text-xs">*</span>
+                      {t.tempPassword} <span className="text-red-500 text-xs">*</span>
                     </label>
                     <div className="flex gap-2">
                       <div className="flex-1 relative">
@@ -795,7 +944,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
                           value={formData.tempPassword}
                           onChange={handleChange}
                           onBlur={handleBlur}
-                          placeholder="Enter or generate temporary password"
+                          placeholder={t.phPassword}
                           className={getFieldError('tempPassword') ? 'border-red-500 pr-10' : 'pr-10'}
                         />
                         <button
@@ -812,7 +961,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
                         onClick={handleGeneratePassword}
                         size="sm"
                       >
-                        Generate
+                        {t.generate}
                       </Button>
                     </div>
                     {getFieldError('tempPassword') && (
@@ -822,7 +971,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
                       </p>
                     )}
                     <p className="text-xs text-[var(--text-dim)] flex items-center gap-1 mt-1">
-                      ⚠️ Save this password - it will be shared with the agent for first login
+                      {t.passwordWarning}
                     </p>
                   </div>
                 </div>
@@ -831,17 +980,17 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               {/* Address Section */}
               <div className="bg-[var(--bg-surface)] rounded-xl p-5 border border-[var(--border-light)]">
                 <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                  📍 Address Information
+                  {t.addressInfo}
                 </h3>
                 <div className="space-y-4">
-                  {renderInputField('Street Address', 'agentAddress', 'text', 'House No 54, Civil Lines', true)}
+                  {renderInputField(t.streetAddress, 'agentAddress', 'text', t.phAddress, true)}
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderSelectField('State', 'agentState', STATES, true)}
-                    {renderSelectField('City', 'agentCity', availableDistricts, true)}
+                    {renderSelectField(t.state, 'agentState', STATES, true)}
+                    {renderSelectField(t.city, 'agentCity', availableDistricts, true)}
                   </div>
                   
-                  {renderInputField('Pincode', 'agentPincode', 'text', '208001', true)}
+                  {renderInputField(t.pincode, 'agentPincode', 'text', t.phPincode, true)}
                 </div>
               </div>
             </div>
@@ -850,12 +999,12 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               {/* Professional Details Section */}
               <div className="bg-[var(--bg-surface)] rounded-xl p-5 border border-[var(--border-light)]">
                 <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                  🆔 Professional Details
+                  {t.profDetails}
                 </h3>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderInputField('Aadhar Number', 'agentAadhar', 'text', '4321-8765-2109', true)}
-                    {renderInputField('License Number', 'agentLicenseNumber', 'text', 'UP-MB-AGENT-2045', false)}
+                    {renderInputField(t.aadharNumber, 'agentAadhar', 'text', t.phAadhar, true)}
+                    {renderInputField(t.licenseNumber, 'agentLicenseNumber', 'text', t.phLicense, false)}
                   </div>
                 </div>
               </div>
@@ -863,12 +1012,12 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               {/* Document Uploads Section */}
               <div className="bg-[var(--bg-surface)] rounded-xl p-5 border border-[var(--border-light)]">
                 <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                  📄 Document Uploads
+                  {t.docUploads}
                 </h3>
                 <div className="space-y-4">
-                  {renderUploadButton('aadhar', 'Aadhar Card', <FileText className="w-5 h-5 text-[#00c9a7]" />, true)}
-                  {renderUploadButton('primary', 'Primary ID Document', <Image className="w-5 h-5 text-[#7c5cfc]" />, true)}
-                  {renderUploadButton('profile', 'Profile Image', <Image className="w-5 h-5 text-[#a78bfa]" />, false)}
+                  {renderUploadButton('aadhar', t.aadharCard, <FileText className="w-5 h-5 text-[#00c9a7]" />, true)}
+                  {renderUploadButton('primary', t.primaryId, <Image className="w-5 h-5 text-[#7c5cfc]" />, true)}
+                  {renderUploadButton('profile', t.profileImage, <Image className="w-5 h-5 text-[#a78bfa]" />, false)}
                 </div>
               </div>
             </div>
@@ -880,7 +1029,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
           <div className="mt-4 bg-red-50 border-l-4 border-red-500 p-3 rounded-md">
             <p className="text-sm text-red-700 font-medium flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
-              Please fix {Object.keys(errors).length} error(s) before submitting
+              {t.fixErrors} {Object.keys(errors).length} {t.errorsBeforeSubmitting}
             </p>
           </div>
         )}
@@ -888,10 +1037,10 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-[var(--border-light)]">
           <Button type="button" variant="ghost" onClick={handleClose} disabled={isCreating}>
-            Cancel
+            {t.cancel}
           </Button>
           <Button type="submit" variant="primary" loading={isCreating}>
-            {isCreating ? 'Creating Agent...' : 'Create Agent'}
+            {isCreating ? t.creatingAgent : t.createAgent}
           </Button>
         </div>
       </form>

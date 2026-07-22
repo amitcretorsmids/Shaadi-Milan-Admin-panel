@@ -10,6 +10,8 @@ interface ModalProps {
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   disableBackdropClose?: boolean;
+  /** Extra content rendered between the title and the close button */
+  headerExtra?: React.ReactNode;
 }
 
 const SIZE_CLASSES: Record<NonNullable<ModalProps['size']>, string> = {
@@ -27,6 +29,7 @@ export function Modal({
   children,
   size = 'lg',
   disableBackdropClose = false,
+  headerExtra,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -88,15 +91,21 @@ export function Modal({
 
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
-            <h2 className="text-lg font-semibold bg-gradient-to-r from-[#00c9a7] to-[#7c5cfc] bg-clip-text text-transparent">
+          <div className="flex items-center px-6 py-4 border-b border-[var(--border)] shrink-0 gap-3">
+            <h2 className="text-lg font-semibold bg-gradient-to-r from-[#00c9a7] to-[#7c5cfc] bg-clip-text text-transparent flex-shrink-0">
               {title}
             </h2>
+            {/* Extra slot — grows to fill space, right-aligned */}
+            {headerExtra && (
+              <div className="flex-1 flex justify-end">
+                {headerExtra}
+              </div>
+            )}
             <button
               type="button"
               onClick={onClose}
               className="
-                w-8 h-8 rounded-lg flex items-center justify-center
+                w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
                 text-[var(--text-muted)]
                 hover:bg-[var(--bg-glass)]
                 hover:text-[var(--text-primary)]

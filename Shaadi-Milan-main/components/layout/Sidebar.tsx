@@ -65,10 +65,13 @@ export function Sidebar() {
       {/* Brand */}
       <div className="p-5 border-b border-[var(--border)]">
         <div className="flex items-center gap-3">
-          {/* <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #f5a623, #e8568a)' }}>
-            💍
-          </div> */}
+          {/* Logo Image */}
+          <img
+            src="/shaadi-milan-logo.png"
+            alt="Shaadi Milan Logo"
+            className="w-10 h-10 rounded-xl object-contain flex-shrink-0"
+            style={{ background: 'rgba(255,200,74,0.08)', padding: '2px' }}
+          />
           <div>
             <div className="font-display text-[13px] font-semibold text-[#ffc84a] leading-tight">
               Shaadi Milan
@@ -79,6 +82,7 @@ export function Sidebar() {
           </div>
         </div>
       </div>
+
 
       {/* Nav */}
       <nav className="flex-1 py-2">

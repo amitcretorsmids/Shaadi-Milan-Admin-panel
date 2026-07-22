@@ -259,14 +259,19 @@ export function Avatar({
   size?: 'sm' | 'md' | 'lg';
   gender?: string;
 }) {
-  const initials = name
+  // Defensively handle non-string values from Firebase
+  const safeName = name != null && typeof name === 'string' ? name : String(name ?? '');
+  const safeGender = gender != null && typeof gender === 'string' ? gender : String(gender ?? '');
+
+  const initials = safeName
     .split(' ')
+    .filter(Boolean)
     .map((n) => n[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase();
+    .toUpperCase() || '?';
 
-  const genderKey = gender?.toLowerCase();
+  const genderKey = safeGender.toLowerCase();
 
   const bg =
     genderKey === 'female'

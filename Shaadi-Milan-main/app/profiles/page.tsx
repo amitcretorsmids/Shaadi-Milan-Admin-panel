@@ -5,6 +5,22 @@ import { Card, CardHeader, Button, Input, Select, Skeleton, Badge, Avatar } from
 
 const STATES = ['Uttar Pradesh', 'Bihar', 'Madhya Pradesh', 'Rajasthan', 'Gujarat', 'Maharashtra', 'Jharkhand', 'Karnataka'];
 
+// ─── Helper: safely extract a string from Firebase fields that may be objects ──
+// Some Firebase fields are stored as { en: "value", hi: "value" } instead of plain strings
+function getString(value: unknown, fallback = ''): string {
+  if (value == null) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.en === 'string') return obj.en;
+    if (typeof obj.hi === 'string') return obj.hi;
+    const firstStr = Object.values(obj).find(v => typeof v === 'string');
+    if (firstStr) return firstStr as string;
+  }
+  return fallback;
+}
+
 export default function ProfilesPage() {
   const { data: usersWithProfiles, isLoading } = useUsersWithProfiles();
   const { mutate: updateUser, isPending } = useUpdateUser();
@@ -58,21 +74,21 @@ export default function ProfilesPage() {
                   }`}
                 >
                   <Avatar 
-                    name={u.fullName} 
+                    name={getString(u.fullName)} 
                     size="sm" 
-                    gender={u.gender as 'male' | 'female'} 
+                    gender={getString(u.gender)} 
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-[var(--text)] truncate">{u.fullName}</div>
+                    <div className="text-xs font-medium text-[var(--text)] truncate">{getString(u.fullName) || '—'}</div>
                     <div className="text-[10px] font-mono text-[var(--text-dim)]">{u.uid}</div>
                     {u.profile?.profileStatus && (
                       <Badge variant={u.profile.profileStatus === 'active' ? 'success' : 'warning'} >
-                        {u.profile.profileStatus}
+                        {getString(u.profile.profileStatus)}
                       </Badge>
                     )}
                   </div>
-                  <Badge variant={u.gender === 'male' ? 'male' : 'female'}>
-                    {u.gender === 'male' ? 'M' : 'F'}
+                  <Badge variant={getString(u.gender) === 'male' ? 'male' : 'female'}>
+                    {getString(u.gender) === 'male' ? 'M' : 'F'}
                   </Badge>
                 </button>
               ))
@@ -91,7 +107,7 @@ export default function ProfilesPage() {
             <>
               <CardHeader
                 title="Edit Profile"
-                subtitle={`${selected.fullName} - ${selected.uid}`}
+                subtitle={`${getString(selected.fullName)} - ${selected.uid}`}
                 action={
                   <div className="flex gap-2">
                     {saved && <span className="text-[11px] text-[#00c9a7] font-medium">✓ Saved!</span>}
@@ -135,16 +151,16 @@ export default function ProfilesPage() {
                     <div className="col-span-2">
                       <div className="flex items-center gap-4 p-4 bg-[var(--bg-surface)] rounded-2xl mb-5">
                         <Avatar 
-                          name={selected.fullName} 
+                          name={getString(selected.fullName)} 
                           size="lg" 
-                          gender={selected.gender} 
+                          gender={getString(selected.gender)} 
                         />
                         <div>
-                          <div className="font-display text-lg font-semibold text-[var(--text)]">{selected.fullName}</div>
+                          <div className="font-display text-lg font-semibold text-[var(--text)]">{getString(selected.fullName) || '—'}</div>
                           <div className="text-[11px] font-mono text-[var(--text-muted)] mt-0.5">{selected.uid}</div>
                           <div className="flex gap-2 mt-1.5">
-                            <Badge variant={selected.gender === 'male' ? 'male' : 'female'}>
-                              {selected.gender}
+                            <Badge variant={getString(selected.gender) === 'male' ? 'male' : 'female'}>
+                              {getString(selected.gender) || 'Unknown'}
                             </Badge>
                             <Badge variant={selected.isProfileCreated ? 'success' : 'warning'}>
                               {selected.isProfileCreated ? 'Profile Complete' : 'Profile Incomplete'}
@@ -166,7 +182,7 @@ export default function ProfilesPage() {
                         </label>
                         <Input
                           type={f.type}
-                          value={form[f.key as keyof typeof form] || ''}
+                          value={getString(form[f.key as keyof typeof form]) || ''}
                           onChange={e => setForm((p: any) => ({ ...p, [f.key]: e.target.value }))}
                           className="w-full"
                         />
@@ -196,7 +212,7 @@ export default function ProfilesPage() {
                         </label>
                         {f.key === 'aboutMe' ? (
                           <textarea
-                            value={f.value || ''}
+                            value={getString(f.value)}
                             rows={3}
                             className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[var(--text)] text-xs outline-none focus:border-[var(--purple)] transition-colors resize-none"
                             onChange={e => setForm((p: any) => ({ 
@@ -207,7 +223,7 @@ export default function ProfilesPage() {
                         ) : (
                           <Input
                             type="text"
-                            value={f.value || ''}
+                            value={getString(f.value)}
                             onChange={e => setForm((p: any) => ({ 
                               ...p, 
                               profileDetails: { ...p.profileDetails, [f.key]: e.target.value } 
@@ -226,8 +242,8 @@ export default function ProfilesPage() {
                     {[
                       { label: 'Family Type', key: 'familyType', value: selected.profile.family?.familyType },
                       { label: 'Family Status', key: 'familyStatus', value: selected.profile.family?.familyStatus },
-                      { label: 'Father\'s Name', key: 'fatherName', value: selected.profile.family?.fatherName },
-                      { label: 'Mother\'s Name', key: 'motherName', value: selected.profile.family?.motherName },
+                      { label: "Father's Name", key: 'fatherName', value: selected.profile.family?.fatherName },
+                      { label: "Mother's Name", key: 'motherName', value: selected.profile.family?.motherName },
                       { label: 'Number of Brothers', key: 'numberOfBrothers', value: selected.profile.family?.numberOfBrothers },
                       { label: 'Number of Sisters', key: 'numberOfSisters', value: selected.profile.family?.numberOfSisters },
                     ].map(f => (
@@ -236,8 +252,8 @@ export default function ProfilesPage() {
                           {f.label}
                         </label>
                         <Input
-                          type={typeof f.value === 'number' ? 'number' : 'text'}
-                          value={f.value || ''}
+                          type="text"
+                          value={getString(f.value)}
                           onChange={e => setForm((p: any) => ({ 
                             ...p, 
                             profileDetails: { ...p.profileDetails, [f.key]: e.target.value } 
@@ -267,8 +283,8 @@ export default function ProfilesPage() {
                           {f.label}
                         </label>
                         <Input
-                          type={typeof f.value === 'number' ? 'number' : 'text'}
-                          value={f.value || ''}
+                          type="text"
+                          value={getString(f.value)}
                           onChange={e => setForm((p: any) => ({ 
                             ...p, 
                             profileDetails: { ...p.profileDetails, [f.key]: e.target.value } 
