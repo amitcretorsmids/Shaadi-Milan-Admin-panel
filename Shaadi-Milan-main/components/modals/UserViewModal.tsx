@@ -7,6 +7,21 @@ import { X, Calendar, Phone, Mail, User, MapPin, Shield, Smartphone, CheckCircle
 import { Avatar, Badge } from '@/components/ui';
 import type { OriginalUser } from '@/types';
 
+// ─── Helper: safely extract a string from Firebase fields that may be {en, hi} objects ───
+function getString(value: unknown, fallback = ''): string {
+  if (value == null) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.en === 'string') return obj.en;
+    if (typeof obj.hi === 'string') return obj.hi;
+    const firstStr = Object.values(obj).find(v => typeof v === 'string');
+    if (firstStr) return firstStr as string;
+  }
+  return fallback;
+}
+
 interface UserViewModalProps {
   user: OriginalUser | null;
   isOpen: boolean;
@@ -80,12 +95,12 @@ export function UserViewModal({ user, isOpen, onClose }: UserViewModalProps) {
                 <div className="p-6">
                   {/* Profile Header */}
                   <div className="flex items-center gap-4 mb-6 pb-6 border-b border-[var(--border)]">
-                    <Avatar name={user.fullName} size="lg" gender={user.gender} />
+                    <Avatar name={getString(user.fullName)} size="lg" gender={getString(user.gender)} />
                     <div className="flex-1">
-                      <h3 className="text-xl font-semibold text-[var(--text)]">{user.fullName}</h3>
+                      <h3 className="text-xl font-semibold text-[var(--text)]">{getString(user.fullName) || 'N/A'}</h3>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge variant={user.gender === 'male' ? 'male' : 'female'}>
-                          {user.gender === 'male' ? 'Male' : 'Female'}
+                        <Badge variant={getString(user.gender) === 'male' ? 'male' : 'female'}>
+                          {getString(user.gender) === 'male' ? 'Male' : 'Female'}
                         </Badge>
                         <Badge variant={user.isProfileCreated ? 'success' : 'warning'}>
                           {user.isProfileCreated ? 'Profile Created' : 'Profile Pending'}
@@ -93,18 +108,18 @@ export function UserViewModal({ user, isOpen, onClose }: UserViewModalProps) {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] text-[var(--text-dim)] font-mono">{user.uid}</p>
+                      <p className="text-[10px] text-[var(--text-dim)] font-mono">{getString(user.uid) || user.uid}</p>
                       <p className="text-[10px] text-[var(--text-muted)] mt-1">User ID</p>
                     </div>
                   </div>
 
                   {/* Info Grid */}
                   <div className="space-y-0 divide-y divide-[var(--border)]">
-                    <InfoRow label="Phone Number" value={user.phone} icon={Phone} />
-                    <InfoRow label="Email Address" value={user.email} icon={Mail} />
-                    <InfoRow label="Platform" value={user.platform?.toUpperCase() || 'N/A'} icon={Smartphone} />
-                    <InfoRow label="Agent ID" value={user.agentId} icon={User} />
-                    <InfoRow label="Role" value={user.role || 'user'} icon={Shield} />
+                    <InfoRow label="Phone Number" value={getString(user.phone)} icon={Phone} />
+                    <InfoRow label="Email Address" value={getString(user.email)} icon={Mail} />
+                    <InfoRow label="Platform" value={getString(user.platform)?.toUpperCase() || 'N/A'} icon={Smartphone} />
+                    <InfoRow label="Agent ID" value={getString(user.agentId)} icon={User} />
+                    <InfoRow label="Role" value={getString(user.role) || 'user'} icon={Shield} />
                     <InfoRow label="Joined At" value={formatDate(user.createdAt)} icon={Calendar} />
                     
                     {user.agentNotifiedOnRegister && (
@@ -118,7 +133,7 @@ export function UserViewModal({ user, isOpen, onClose }: UserViewModalProps) {
                     {user.fcmToken && (
                       <InfoRow 
                         label="FCM Token" 
-                        value={user.fcmToken.substring(0, 30) + '...'} 
+                        value={getString(user.fcmToken).substring(0, 30) + '...'} 
                         icon={Smartphone} 
                       />
                     )}
