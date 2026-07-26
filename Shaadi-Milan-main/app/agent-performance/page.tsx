@@ -9,9 +9,9 @@ export default function AgentPerformancePage() {
   const { data: agents, isLoading } = useAgents();
 
   const chartData = (agents || []).map(a => ({
-    name: a.name.split(' ')[0],
-    users: a.usersAdded,
-    paid: a.usersPaid,
+    name: (a.name || (a as any).agentName || 'Unknown').split(' ')[0],
+    users: a.usersAdded || 0,
+    paid: a.usersPaid || 0,
   }));
 
   const convColors: Array<'teal' | 'gold' | 'pink' | 'purple'> = ['teal', 'gold', 'pink', 'purple', 'teal', 'gold', 'pink', 'purple'];
@@ -33,28 +33,28 @@ export default function AgentPerformancePage() {
           {(agents || []).map((a, i) => (
             <div key={a.id} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5 hover:border-[var(--border-light)] hover:-translate-y-0.5 transition-all duration-200">
               <div className="flex items-center gap-3 mb-4">
-                <Avatar name={a.name} size="md" />
+                <Avatar name={a.name || (a as any).agentName || 'Unknown'} size="md" />
                 <div>
-                  <div className="font-semibold text-sm text-[var(--text)]">{a.name}</div>
-                  <div className="text-[10px] font-mono text-[var(--text-dim)] mt-0.5">{a.id}</div>
-                  <div className="text-[11px] text-[var(--text-muted)]">{a.district}, {a.state}</div>
+                  <div className="font-semibold text-sm text-[var(--text)]">{a.name || (a as any).agentName || 'Unknown'}</div>
+                  <div className="text-[10px] font-mono text-[var(--text-dim)] mt-0.5">{a.id || (a as any).agentId}</div>
+                  <div className="text-[11px] text-[var(--text-muted)]">{a.district || (a as any).agentCity || 'N/A'}, {a.state || (a as any).agentState || 'N/A'}</div>
                 </div>
-                <Badge variant={a.status === 'Active' ? 'success' : 'warning'} >{a.status}</Badge>
+                <Badge variant={a.status === 'Active' ? 'success' : 'warning'} >{a.status || ((a as any).isApproved ? 'Active' : 'Pending')}</Badge>
               </div>
 
               <div className="mb-3">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Conversion Rate</span>
-                  <span className="text-xs font-semibold text-[var(--text)]">{a.conversionRate}%</span>
+                  <span className="text-xs font-semibold text-[var(--text)]">{a.conversionRate || 0}%</span>
                 </div>
-                <ProgressBar value={a.conversionRate} color={convColors[i % 4]} />
+                <ProgressBar value={a.conversionRate || 0} color={convColors[i % 4]} />
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: 'Users Added', value: a.usersAdded, color: 'text-[#93c5fd]' },
-                  { label: 'Paid Users', value: a.usersPaid, color: 'text-[#00c9a7]' },
-                  { label: 'Revenue', value: `₹${(a.totalRevenue / 1000).toFixed(0)}k`, color: 'text-[#ffc84a]' },
+                  { label: 'Users Added', value: a.usersAdded || 0, color: 'text-[#93c5fd]' },
+                  { label: 'Paid Users', value: a.usersPaid || 0, color: 'text-[#00c9a7]' },
+                  { label: 'Revenue', value: `₹${((a.totalRevenue || 0) / 1000).toFixed(0)}k`, color: 'text-[#ffc84a]' },
                 ].map(s => (
                   <div key={s.label} className="bg-[var(--bg-surface)] rounded-xl p-2.5">
                     <div className={`text-lg font-semibold font-display ${s.color}`}>{s.value}</div>

@@ -837,11 +837,38 @@ export const firebaseApi = {
     lastDocId: string | null;
   }> => {
     try {
-      const getNotifications = httpsCallable(firebaseApi.functions, 'getAllNotifications');
-      const result = await getNotifications(filters || {});
-      return result.data as { notifications: any[]; lastDocId: string | null };
+      let q = query(
+        collection(db, 'notifications'),
+        orderBy('createdAt', 'desc'),
+        limit(filters?.limit || 20)
+      );
+
+      if (filters?.target && filters.target !== 'All') {
+        q = query(q, where('target', '==', filters.target));
+      }
+      if (filters?.status && filters.status !== 'All') {
+        q = query(q, where('status', '==', filters.status));
+      }
+
+      if (filters?.lastDocId) {
+        const lastDocSnap = await getDoc(doc(db, 'notifications', filters.lastDocId));
+        if (lastDocSnap.exists()) {
+          q = query(q, startAfter(lastDocSnap));
+        }
+      }
+
+      const snapshot = await getDocs(q);
+      const notifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      return {
+        notifications,
+        lastDocId: snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null
+      };
     } catch (error: any) {
-      console.error("❌ Error fetching notifications:", error);
+      console.error("❌ Error fetching notifications directly:", error);
       throw error;
     }
   },

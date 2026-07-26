@@ -28,28 +28,28 @@ interface UserViewModalProps {
   onClose: () => void;
 }
 
+const formatDate = (date: any) => {
+  if (!date) return 'N/A';
+  if (typeof date === 'object' && date.toDate) {
+    return date.toDate().toLocaleString();
+  }
+  return new Date(date).toLocaleString();
+};
+
+const InfoRow = ({ label, value, icon: Icon }: any) => (
+  <div className="flex items-start gap-3 py-3 border-b border-[var(--border)] last:border-0">
+    <div className=" flex-shrink-0 w-8 h-8 rounded-lg bg-[rgba(124,92,252,0.1)] flex items-center justify-center">
+      <Icon className="w-4 h-4 text-[#7c5cfc]" />
+    </div>
+    <div className="flex-1">
+      <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
+      <p className="text-sm text-[var(--text)] mt-0.5 break-all">{value || 'N/A'}</p>
+    </div>
+  </div>
+);
+
 export function UserViewModal({ user, isOpen, onClose }: UserViewModalProps) {
   if (!user) return null;
-
-  const formatDate = (date: any) => {
-    if (!date) return 'N/A';
-    if (typeof date === 'object' && date.toDate) {
-      return date.toDate().toLocaleString();
-    }
-    return new Date(date).toLocaleString();
-  };
-
-  const InfoRow = ({ label, value, icon: Icon }: any) => (
-    <div className="flex items-start gap-3 py-3 border-b border-[var(--border)] last:border-0">
-      <div className=" flex-shrink-0 w-8 h-8 rounded-lg bg-[rgba(124,92,252,0.1)] flex items-center justify-center">
-        <Icon className="w-4 h-4 text-[#7c5cfc]" />
-      </div>
-      <div className="flex-1">
-        <p className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
-        <p className="text-sm text-[var(--text)] mt-0.5 break-all">{value || 'N/A'}</p>
-      </div>
-    </div>
-  );
 
   return (
     <Transition appear show={isOpen} as={Fragment}>

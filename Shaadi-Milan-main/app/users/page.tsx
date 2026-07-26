@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useOriginalAgents,
-  useUpdateOriginalUser,
   usePaginatedUsers,
   useUsersStats,
 } from '@/hooks/use-queries';
@@ -27,7 +26,7 @@ import {
 } from '@/components/ui';
 
 import { UserViewModal } from '@/components/modals/UserViewModal';
-import { UserEditModal } from '@/components/modals/UserEditModal';
+import { UserAddModal } from '@/components/modals/UserAddModal';
 import type { OriginalUser } from '@/types';
 import { Timestamp } from "firebase/firestore";
 
@@ -125,8 +124,6 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
   }, [data]);
 
   const { data: agents } = useOriginalAgents();
-  const { mutate: updateUser, isPending: isUpdating } = useUpdateOriginalUser();
-
   const agentOptions: AgentOption[] = useMemo(() => [
     { id: 'All', name: 'All Agents' },
     ...(agents?.map(a => ({ id: a.uid, name: a.agentName })) || [])
@@ -142,7 +139,8 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
   // Modal states
   const [selectedUser, setSelectedUser] = useState<OriginalUser | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // full 9-step edit
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const handleViewUser = useCallback((user: OriginalUser) => {
     setSelectedUser(user);
@@ -154,19 +152,6 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
     setSelectedUser(user);
     setIsEditModalOpen(true);
   }, []);
-
-  const handleUpdateUser = useCallback(async (uid: string, data: Partial<OriginalUser>) => {
-    updateUser(
-      { uid, data },
-      {
-        onSuccess: () => {
-          setIsEditModalOpen(false);
-          setSelectedUser(null);
-          refetch();
-        },
-      }
-    );
-  }, [updateUser, refetch]);
 
   // Export CSV
   const handleExportCSV = useCallback(() => {
@@ -219,6 +204,9 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
         subtitle="Manage and monitor all registered users"
         action={
           <div className="flex gap-2">
+            <Button variant="primary" onClick={() => setIsAddModalOpen(true)}>
+              + Add User
+            </Button>
             <Button variant="ghost" onClick={handleClearFilters}>
               Clear Filters
             </Button>
@@ -437,12 +425,23 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
         isOpen={isViewModalOpen} 
         onClose={() => setIsViewModalOpen(false)} 
       />
-      <UserEditModal 
-        user={selectedUser} 
-        isOpen={isEditModalOpen} 
-        onClose={() => setIsEditModalOpen(false)} 
-        onSave={handleUpdateUser} 
-        isSaving={isUpdating} 
+      {/* Full 9-step Edit Modal */}
+      <UserAddModal 
+        isOpen={isEditModalOpen}
+        onClose={() => { setIsEditModalOpen(false); setSelectedUser(null); }}
+        onAdd={() => { setIsEditModalOpen(false); setSelectedUser(null); refetch(); }}
+        isAdding={false}
+        editUser={selectedUser}
+      />
+      {/* Add New User Modal */}
+      <UserAddModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        onAdd={(data) => {
+          console.log("Add user data:", data);
+          setIsAddModalOpen(false);
+        }}
+        isAdding={false}
       />
     </div>
   );

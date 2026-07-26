@@ -416,13 +416,13 @@ export default function OrdersPage() {
               {/* Agent Filter */}
               <Select value={agentFilter} onChange={e => setAgentFilter(e.target.value)}>
                 <option value="All">All Agents</option>
-                {agents.map((agent) => (
-                  <option key={agent.uid} value={agent.agentId}>
+                {agents.map((agent, index) => (
+                  <option key={agent.uid || agent.agentId || index} value={agent.agentId}>
                     {agent.agentName} ({agent.agentId})
                   </option>
                 ))}
               </Select>
-              
+
               {/* Gender Filter */}
               <Select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
                 <option value="All">All Types</option>

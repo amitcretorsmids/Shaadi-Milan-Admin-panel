@@ -1,0 +1,119 @@
+[
+  {
+    "religion": "Hindu",
+    "religionHi": "हिन्दू",
+    "castes": [
+      { "name": "Brahmin", "nameHi": "ब्राह्मण" },
+      { "name": "Rajput / Kshatriya", "nameHi": "राजपूत / क्षत्रिय" },
+      { "name": "Yadav", "nameHi": "यादव" },
+      { "name": "Jat", "nameHi": "जाट" },
+      { "name": "Bania / Vaishya", "nameHi": "बनिया / वैश्य" },
+      { "name": "Agarwal", "nameHi": "अग्रवाल" },
+      { "name": "Maheshwari", "nameHi": "माहेश्वरी" },
+      { "name": "Khatri", "nameHi": "खत्री" },
+      { "name": "Kayastha", "nameHi": "कायस्थ" },
+      { "name": "Kurmi", "nameHi": "कुर्मी" },
+      { "name": "Lodhi", "nameHi": "लोधी" },
+      { "name": "Gupta", "nameHi": "गुप्ता" },
+      { "name": "Teli", "nameHi": "तेली" },
+      { "name": "Marwari", "nameHi": "मारवाड़ी" },
+      { "name": "Kumhar", "nameHi": "कुम्हार" },
+      { "name": "Mali", "nameHi": "माली" },
+      { "name": "Lohar", "nameHi": "लोहार" },
+      { "name": "Sonar / Soni", "nameHi": "सोनार / सोनी" },
+      { "name": "Darji / Suthar", "nameHi": "दर्जी / सुथार" },
+      { "name": "Nair", "nameHi": "नायर" },
+      { "name": "Reddy", "nameHi": "रेड्डी" },
+      { "name": "Lingayat", "nameHi": "लिंगायत" },
+      { "name": "Vokkaliga", "nameHi": "वोक्कालिगा" },
+      { "name": "Ezhava", "nameHi": "एझवा" },
+      { "name": "Nadar", "nameHi": "नादर" },
+      { "name": "Pasi", "nameHi": "पासी" },
+      { "name": "Chamar / Jatav", "nameHi": "चमार / जाटव" },
+      { "name": "Dhobi", "nameHi": "धोबी" },
+      { "name": "SC / Scheduled Caste", "nameHi": "अनुसूचित जाति" },
+      { "name": "ST / Scheduled Tribe", "nameHi": "अनुसूचित जनजाति" },
+      { "name": "OBC / Other Backward Class", "nameHi": "अन्य पिछड़ा वर्ग" },
+      { "name": "Other", "nameHi": "अन्य" }
+    ]
+  },
+  {
+    "religion": "Muslim",
+    "religionHi": "मुस्लिम",
+    "castes": [
+      { "name": "Sunni", "nameHi": "सुन्नी" },
+      { "name": "Shia", "nameHi": "शिया" },
+      { "name": "Syed", "nameHi": "सैयद" },
+      { "name": "Sheikh", "nameHi": "शेख" },
+      { "name": "Pathan / Khan", "nameHi": "पठान / खान" },
+      { "name": "Qureshi", "nameHi": "क़ुरैशी" },
+      { "name": "Ansari", "nameHi": "अंसारी" },
+      { "name": "Momin", "nameHi": "मोमिन" },
+      { "name": "Mughal", "nameHi": "मुग़ल" },
+      { "name": "Other", "nameHi": "अन्य" }
+    ]
+  },
+  {
+    "religion": "Sikh",
+    "religionHi": "सिख",
+    "castes": [
+      { "name": "Jat Sikh", "nameHi": "जाट सिख" },
+      { "name": "Khatri Sikh", "nameHi": "खत्री सिख" },
+      { "name": "Arora Sikh", "nameHi": "अरोड़ा सिख" },
+      { "name": "Ramgarhia", "nameHi": "रामगड़िया" },
+      { "name": "Ravidassia", "nameHi": "रविदासिया" },
+      { "name": "Saini", "nameHi": "सैनी" },
+      { "name": "Mazabi Sikh", "nameHi": "मज़ाबी सिख" },
+      { "name": "Other", "nameHi": "अन्य" }
+    ]
+  },
+  {
+    "religion": "Christian",
+    "religionHi": "ईसाई",
+    "castes": [
+      { "name": "Catholic", "nameHi": "कैथोलिक" },
+      { "name": "Protestant", "nameHi": "प्रोटेस्टेंट" },
+      { "name": "Orthodox", "nameHi": "ऑर्थोडॉक्स" },
+      { "name": "Pentecostal", "nameHi": "पेंटेकोस्टल" },
+      { "name": "Other", "nameHi": "अन्य" }
+    ]
+  },
+  {
+    "religion": "Jain",
+    "religionHi": "जैन",
+    "castes": [
+      { "name": "Digambar", "nameHi": "दिगम्बर" },
+      { "name": "Shvetambar", "nameHi": "श्वेताम्बर" },
+      { "name": "Sthanakvasi", "nameHi": "स्थानकवासी" },
+      { "name": "Oswal", "nameHi": "ओसवाल" },
+      { "name": "Porwal", "nameHi": "पोरवाल" },
+      { "name": "Other", "nameHi": "अन्य" }
+    ]
+  },
+  {
+    "religion": "Buddhist",
+    "religionHi": "बौद्ध",
+    "castes": [
+      { "name": "Navayana", "nameHi": "नवयान" },
+      { "name": "Theravada", "nameHi": "थेरवाद" },
+      { "name": "Mahayana", "nameHi": "महायान" },
+      { "name": "Vajrayana", "nameHi": "वज्रयान" },
+      { "name": "Other", "nameHi": "अन्य" }
+    ]
+  },
+  {
+    "religion": "Parsi / Zoroastrian",
+    "religionHi": "पारसी / पारस्थी",
+    "castes": [
+      { "name": "Parsi", "nameHi": "पारसी" },
+      { "name": "Other", "nameHi": "अन्य" }
+    ]
+  },
+  {
+    "religion": "Other",
+    "religionHi": "अन्य",
+    "castes": [
+      { "name": "Other", "nameHi": "अन्य" }
+    ]
+  }
+]
