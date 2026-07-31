@@ -3,7 +3,7 @@
 'use client';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, Type, User, CreditCard, Calendar, Loader2, MapPin, Mail, Shield, ChevronDown, GraduationCap, Book, Percent, PlusCircle, Building, Briefcase, IndianRupee, Users, CircleDot, UserPlus, Globe, Ruler, Scale, Upload } from 'lucide-react';
+import { X, Type, User, CreditCard, Calendar, Loader2, MapPin, Mail, Shield, ChevronDown, GraduationCap, Book, Percent, PlusCircle, Building, Briefcase, IndianRupee, Users, CircleDot, UserPlus, Globe, Ruler, Scale, Upload, Camera, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui';
 import locationData from '@/constants/location.json';
 import religionData from '@/constants/religions_castes.json';
@@ -172,6 +172,63 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
   // List states for multi-entry fields
   const [extraQualifications, setExtraQualifications] = useState<{en: string; hi: string}[]>([]);
   const [knownLanguages, setKnownLanguages] = useState<{en: string; hi: string}[]>([]);
+
+  // Master data from Firebase
+  const [masterQualifications, setMasterQualifications] = useState<{en: string, hi: string}[]>([]);
+  const [masterDesignations, setMasterDesignations] = useState<{en: string, hi: string}[]>([]);
+  const [masterAnnualIncomes, setMasterAnnualIncomes] = useState<{en: string, hi: string}[]>([]);
+  const [isMasterLoading, setIsMasterLoading] = useState(false);
+
+  // Fetch master data from Firebase when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchMasterData = async () => {
+      setIsMasterLoading(true);
+      try {
+        const fetchCollection = async (names: string[]) => {
+          for (const name of names) {
+            try {
+              const snap = await getDocs(collection(db, name));
+              if (!snap.empty) return snap;
+            } catch (e) {
+              console.warn(`Failed to fetch ${name}`);
+            }
+          }
+          return { docs: [], empty: true, size: 0 };
+        };
+
+        const [qualificationsSnap, designationsSnap, incomesSnap] = await Promise.all([
+          fetchCollection(['master_qualification', 'master_qualifications', 'master_degree', 'master_degrees', 'masterqualification', 'masterdegree']),
+          fetchCollection(['master_designation', 'master_designations', 'masterdesignation']),
+          fetchCollection(['master_annual_income', 'master_annual_incomes', 'master_annual', 'masterannualincome', 'annual_income', 'master_income']),
+        ]);
+        
+        console.log("Firebase fetched sizes -> Qual:", qualificationsSnap.size, "Desig:", designationsSnap.size, "Inc:", incomesSnap.size);
+
+        // Extract both English and Hindi values
+        const extractData = (d: any) => {
+          const data = d.data();
+          let enValue = data.nameEn || data.name_en || data.name || data.en || data.value || data.title || data.degree || data.designation || data.income || data.label;
+          if (!enValue) {
+            // Find the first string value if standard names aren't found
+            const stringValues = Object.values(data).filter(v => typeof v === 'string');
+            enValue = stringValues[0] || '';
+          }
+          let hiValue = data.nameHi || data.name_hi || data.name_hindi || data.hindi || data.hi || enValue;
+          return { en: String(enValue), hi: String(hiValue) };
+        };
+
+        setMasterQualifications(qualificationsSnap.docs.map(extractData).filter(item => item.en));
+        setMasterDesignations(designationsSnap.docs.map(extractData).filter(item => item.en));
+        setMasterAnnualIncomes(incomesSnap.docs.map(extractData).filter(item => item.en));
+      } catch (err) {
+        console.warn('Failed to fetch master data:', err);
+      } finally {
+        setIsMasterLoading(false);
+      }
+    };
+    fetchMasterData();
+  }, [isOpen]);
 
   const [formData, setFormData] = useState({
     // Basic Info (for users collection)
@@ -511,14 +568,10 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
   const validateStep = (): string[] => {
     const errors: string[] = [];
     if (step === 1) {
-      if (!formData.fullName.trim()) errors.push('Full Name is required.');
-      if (!formData.phone.trim() || formData.phone.length < 10) errors.push('Valid 10-digit Phone Number is required.');
-      if (!formData.email.trim() || !formData.email.includes('@')) errors.push('Valid Email Address is required.');
-      if (!formData.aboutMeEn.trim()) errors.push('About Me (English) is required.');
-      if (!formData.aadharNumber.trim() || formData.aadharNumber.length !== 12) errors.push('Valid 12-digit Aadhar Number is required.');
-      if (!formData.dob) {
-        errors.push('Date of Birth is required.');
-      } else {
+      if (String(formData.phone || '').trim() && String(formData.phone || '').length < 10) errors.push('Valid 10-digit Phone Number is required.');
+      if (String(formData.email || '').trim() && !String(formData.email || '').includes('@')) errors.push('Valid Email Address is required.');
+
+      if (formData.dob) {
         const selectedDate = new Date(formData.dob);
         const eighteenYearsAgo = new Date();
         eighteenYearsAgo.setFullYear(eighteenYearsAgo.getFullYear() - 18);
@@ -530,45 +583,7 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
       }
     }
     if (step === 2) {
-      if (!formData.placeEn.trim()) errors.push('Place is required.');
-      if (!formData.postEn.trim()) errors.push('Post Office is required.');
-      if (!formData.policeStationEn.trim()) errors.push('Police Station is required.');
-      if (!formData.state) errors.push('State is required.');
-      if (!formData.district) errors.push('District is required.');
-      if (!formData.pinCode.trim() || formData.pinCode.length !== 6) errors.push('Valid 6-digit PIN Code is required.');
-    }
-    if (step === 3) {
-      if (formData.isLiterate) {
-        if (!formData.collegeEn.trim()) errors.push('College/School name is required.');
-        if (!formData.degreeEn.trim()) errors.push('Degree is required.');
-        if (!formData.passingYear.trim()) errors.push('Passing Year is required.');
-      }
-    }
-    if (step === 4) {
-      if (!formData.jobType) errors.push('Job Type is required.');
-      if (!formData.annualIncome.trim()) errors.push('Annual Income is required.');
-    }
-    if (step === 5) {
-      if (!formData.fatherNameEn.trim()) errors.push("Father's Name is required.");
-      if (!formData.motherNameEn.trim()) errors.push("Mother's Name is required.");
-      if (!formData.familyType) errors.push('Family Type is required.');
-    }
-    if (step === 6) {
-      if (!formData.religion) errors.push('Religion is required.');
-      if (!formData.caste) errors.push('Caste is required.');
-    }
-    if (step === 7) {
-      if (!formData.height.trim()) errors.push('Height is required.');
-      if (!formData.weight.trim()) errors.push('Weight is required.');
-      if (!formData.bodyType) errors.push('Body Type is required.');
-      if (!formData.complexion) errors.push('Complexion is required.');
-    }
-    if (step === 8) {
-      if (!formData.profileImage && !existingMediaUrls?.profileImage) errors.push('Profile Image is required.');
-      if (!formData.matrimonyImage && !existingMediaUrls?.matrimonyImage) errors.push('Matrimony Image is required.');
-      if (!formData.agentImage && !existingMediaUrls?.agentImage) errors.push('Image with Agent is required.');
-      if (!formData.aadharDoc && !existingMediaUrls?.aadharDoc) errors.push('Aadhar Document is required.');
-      if (!formData.biodataDoc && !existingMediaUrls?.biodataDoc) errors.push('Biodata Document is required.');
+      if (String(formData.pinCode || '').trim() && String(formData.pinCode || '').trim().length !== 6) errors.push('Valid 6-digit PIN Code is required.');
     }
     return errors;
   };
@@ -603,28 +618,16 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
         const basePath = `metrimony_profiles/${uid}`;
 
         console.log('Starting file uploads...');
-        const [profileImageUrl, matrimonyImageUrl, agentImageUrl, galleryImageUrl, aadharDocUrl, biodataDocUrl] =
-          await Promise.all([
-            uploadFile(formData.profileImage, `${basePath}/profileImage`),
-            uploadFile(formData.matrimonyImage, `${basePath}/matrimonyImage`),
-            uploadFile(formData.agentImage, `${basePath}/agentImage`),
-            uploadFile(formData.galleryImages, `${basePath}/galleryImage`),
-            uploadFile(formData.aadharDoc, `${basePath}/aadharDoc`),
-            uploadFile(formData.biodataDoc, `${basePath}/biodataDoc`),
-          ]);
+        const profileImageUrl = await uploadFile(formData.profileImage, `${basePath}/profileImage`);
         console.log('Files uploaded. Saving to Firestore...');
 
         // 2. Build the structured Firestore document
         const profileData: Record<string, any> = {
           personalInfo: {
-            aboutMe: { en: formData.aboutMeEn, hi: formData.aboutMeHi },
-            aadharNumber: formData.aadharNumber,
             dob: formData.dob,
           },
           address: {
             addressLine1: { en: formData.placeEn, hi: formData.placeHi },
-            postOffice:   { en: formData.postEn,   hi: formData.postHi },
-            policeStation: { en: formData.policeStationEn, hi: formData.policeStationHi },
             city:    { en: formData.district, hi: formData.district },
             state:   { en: formData.state,    hi: formData.state },
             pincode: formData.pinCode,
@@ -633,8 +636,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
             isLiterate: formData.isLiterate,
             college:            { en: formData.collegeEn,            hi: formData.collegeHi },
             degree:             { en: formData.degreeEn,             hi: formData.degreeHi },
-            passingYear:        formData.passingYear,
-            percentage:         formData.percentage,
             extraQualification: extraQualifications.length > 0
               ? { en: extraQualifications.map(q => q.en).join(', '), hi: extraQualifications.map(q => q.hi).join(', ') }
               : { en: formData.extraQualificationEn, hi: formData.extraQualificationHi },
@@ -658,7 +659,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
           cultural: {
             religion: formData.religion,
             caste:    formData.caste,
-            subCaste: { en: formData.subCasteEn, hi: formData.subCasteHi },
             language: knownLanguages.length > 0
               ? { en: knownLanguages.map(l => l.en).join(', '), hi: knownLanguages.map(l => l.hi).join(', ') }
               : { en: formData.languageEn, hi: formData.languageHi },
@@ -673,11 +673,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
           },
           mediaUrls: {
             profileImage:    profileImageUrl || existingMediaUrls?.profileImage || '',
-            matrimonyImage:  matrimonyImageUrl || existingMediaUrls?.matrimonyImage || '',
-            agentImage:      agentImageUrl || existingMediaUrls?.agentImage || '',
-            galleryImages:   galleryImageUrl ? [galleryImageUrl] : (existingMediaUrls?.galleryImages || []),
-            aadharDoc:       aadharDocUrl || existingMediaUrls?.aadharDoc || '',
-            biodataDoc:      biodataDocUrl || existingMediaUrls?.biodataDoc || '',
           },
           source: isEditMode ? (existingMediaUrls ? 'admin_panel' : 'admin_panel') : 'admin_panel',
           status: 'active',
@@ -899,33 +894,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                         </div>
                       </div>
 
-                      <FormStepInput
-                        label="About Me (English)"
-                        iconText="ABC"
-                        placeholder="Tell Us About Yourself"
-                        value={formData.aboutMeEn}
-                        onChange={(e: any) => setFormData({ ...formData, aboutMeEn: e.target.value })}
-                      />
-
-                      <FormStepInput
-                        label="About Me (हिन्दी)"
-                        icon={User}
-                        placeholder="अपने बारे में बताएं"
-                        value={formData.aboutMeHi}
-                        isLoading={translatingFields.aboutMeHi}
-                        hint={translatingFields.aboutMeHi ? 'Translating...' : ''}
-                        onChange={(e: any) => setFormData({ ...formData, aboutMeHi: e.target.value })}
-                      />
-
-                      <FormStepInput
-                        label={formLanguage === 'hi' ? 'आधार नंबर (Aadhar Number)' : 'Aadhar Number'}
-                        icon={CreditCard}
-                        placeholder="000000000000"
-                        maxLength={12}
-                        hint="12 characters"
-                        value={formData.aadharNumber}
-                        onChange={(e: any) => setFormData({ ...formData, aadharNumber: e.target.value.replace(/\D/g, '') })}
-                      />
 
                       <FormStepInput
                         label={formLanguage === 'hi' ? 'जन्म तिथि (Date of Birth)' : 'Date of Birth'}
@@ -959,48 +927,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                           isLoading={translatingFields.placeHi}
                           hint={translatingFields.placeHi ? 'Translating...' : ''}
                           onChange={(e: any) => setFormData({ ...formData, placeHi: e.target.value })}
-                        />
-                      )}
-
-                      {formLanguage === 'en' && (
-                        <FormStepInput
-                          label="Post (English)"
-                          iconText="ABC"
-                          placeholder="Type in English to transliterate"
-                          value={formData.postEn}
-                          onChange={(e: any) => setFormData({ ...formData, postEn: e.target.value })}
-                        />
-                      )}
-                      {formLanguage === 'hi' && (
-                        <FormStepInput
-                          label="पोस्ट ऑफिस (Post)"
-                          icon={Mail}
-                          placeholder={formLanguage === 'hi' ? 'पोस्ट ऑफिस दर्ज करें' : 'Enter post office'}
-                          value={formData.postHi}
-                          isLoading={translatingFields.postHi}
-                          hint={translatingFields.postHi ? 'Translating...' : ''}
-                          onChange={(e: any) => setFormData({ ...formData, postHi: e.target.value })}
-                        />
-                      )}
-
-                      {formLanguage === 'en' && (
-                        <FormStepInput
-                          label="Police Station (English)"
-                          iconText="ABC"
-                          placeholder="Type in English to transliterate"
-                          value={formData.policeStationEn}
-                          onChange={(e: any) => setFormData({ ...formData, policeStationEn: e.target.value })}
-                        />
-                      )}
-                      {formLanguage === 'hi' && (
-                        <FormStepInput
-                          label="पुलिस स्टेशन (Police Station)"
-                          icon={Shield}
-                          placeholder={formLanguage === 'hi' ? 'पुलिस स्टेशन दर्ज करें' : 'Enter Police station'}
-                          value={formData.policeStationHi}
-                          isLoading={translatingFields.policeStationHi}
-                          hint={translatingFields.policeStationHi ? 'Translating...' : ''}
-                          onChange={(e: any) => setFormData({ ...formData, policeStationHi: e.target.value })}
                         />
                       )}
 
@@ -1046,8 +972,8 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                             <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="">
                               {formLanguage === 'hi' ? 'ज़िला चुनें' : 'Select district'}
                             </option>
-                            {availableDistricts.map(district => (
-                              <option className="bg-[var(--bg-surface)] text-[var(--text)]" key={district as string} value={district as string}>{district as string}</option>
+                            {availableDistricts.map((district, index) => (
+                              <option className="bg-[var(--bg-surface)] text-[var(--text)]" key={`${district}-${index}`} value={district as string}>{district as string}</option>
                             ))}
                           </select>
                           <ChevronDown className="w-4 h-4 text-[var(--text-dim)] absolute right-4 pointer-events-none" />
@@ -1114,46 +1040,39 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                             onChange={(e: any) => setFormData({ ...formData, collegeHi: e.target.value })}
                           />
 
-                          <FormStepInput
-                            label="Degree / Course (English)"
-                            iconText="ABC"
-                            placeholder="Type in English to transliterate"
-                            value={formData.degreeEn}
-                            onChange={(e: any) => setFormData({ ...formData, degreeEn: e.target.value })}
-                          />
-                          <FormStepInput
-                            label="Degree / Course (हिन्दी)"
-                            icon={Book}
-                            placeholder="Enter degree or course name"
-                            value={formData.degreeHi}
-                            isLoading={translatingFields.degreeHi}
-                            hint={translatingFields.degreeHi ? 'Translating...' : ''}
-                            onChange={(e: any) => setFormData({ ...formData, degreeHi: e.target.value })}
-                          />
-
-                          <div className="flex gap-3">
-                            <div className="flex-1">
-                              <FormStepInput
-                                label="Percentage / CGPA"
-                                icon={Percent}
-                                placeholder="e.g., 75.5"
-                                type="number"
-                                value={formData.percentage}
-                                onChange={(e: any) => setFormData({ ...formData, percentage: e.target.value })}
-                              />
+                          {/* Degree Dropdown from Firebase master_degrees */}
+                          <div className="relative mt-3 mb-4">
+                            <div className="absolute -top-2 left-4 px-1 bg-[var(--bg-card)] text-[10px] text-[var(--text-muted)] z-10">
+                              Degree / Course
                             </div>
-                            <div className="flex-1">
-                              <FormStepInput
-                                label="Passing Year"
-                                icon={Calendar}
-                                placeholder="e.g., 2023"
-                                type="number"
-                                maxLength={4}
-                                value={formData.passingYear}
-                                onChange={(e: any) => setFormData({ ...formData, passingYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                              />
+                            <div className="flex items-center border border-[var(--border)] rounded-[1.5rem] p-2 bg-[var(--bg-surface)] focus-within:border-[#7c5cfc] transition-colors relative">
+                              <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-[rgba(232,86,106,0.15)] text-[#e8568a] mr-3">
+                                <Book className="w-5 h-5" />
+                              </div>
+                              <select
+                                value={formData.degreeEn}
+                                onChange={(e) => {
+                                  const selected = masterQualifications.find(q => q.en === e.target.value);
+                                  setFormData({ ...formData, degreeEn: e.target.value, degreeHi: selected?.hi || e.target.value });
+                                }}
+                                className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--text)] font-medium appearance-none cursor-pointer"
+                              >
+                                <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="">Select degree / course</option>
+                                {isMasterLoading
+                                  ? <option disabled>Loading...</option>
+                                  : masterQualifications.length > 0
+                                    ? masterQualifications.map((d, i) => (
+                                      <option className="bg-[var(--bg-surface)] text-[var(--text)]" key={i} value={d.en}>
+                                        {formLanguage === 'en' ? d.en : d.hi}
+                                      </option>
+                                    ))
+                                    : <option disabled>No data found</option>
+                                }
+                              </select>
+                              <ChevronDown className="w-4 h-4 text-[var(--text-dim)] absolute right-4 pointer-events-none" />
                             </div>
                           </div>
+
 
                           <div className="text-[#a32b36] font-semibold text-sm mb-4 mt-4 px-2 bg-[#a32b3615] py-2 rounded-lg inline-block w-full">
                             Additional Qualifications
@@ -1258,22 +1177,49 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                         onChange={(e: any) => setFormData({ ...formData, organizationHi: e.target.value })}
                       />
 
-                      <FormStepInput
-                        label="Designation (English)"
-                        iconText="ABC"
-                        placeholder="Type in English to transliterate"
-                        value={formData.designationEn}
-                        onChange={(e: any) => setFormData({ ...formData, designationEn: e.target.value })}
-                      />
-                      <FormStepInput
-                        label="Designation (हिन्दी)"
-                        icon={Briefcase}
-                        placeholder="Designation"
-                        value={formData.designationHi}
-                        isLoading={translatingFields.designationHi}
-                        hint={translatingFields.designationHi ? 'Translating...' : ''}
-                        onChange={(e: any) => setFormData({ ...formData, designationHi: e.target.value })}
-                      />
+                      {/* Designation Dropdown */}
+                      <div className="relative mt-3 mb-4">
+                        <div className="absolute -top-2 left-4 px-1 bg-[var(--bg-card)] text-[10px] text-[var(--text-muted)] z-10">
+                          {formLanguage === 'hi' ? 'पद / नौकरी (Designation)' : 'Designation'}
+                        </div>
+                        <div className="flex items-center border border-[var(--border)] rounded-[1.5rem] p-2 bg-[var(--bg-surface)] focus-within:border-[#7c5cfc] transition-colors relative">
+                          <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-[rgba(232,86,106,0.15)] text-[#e8568a] mr-3">
+                            <Briefcase className="w-5 h-5" />
+                          </div>
+                          <select
+                            value={formData.designationEn}
+                            onChange={(e) => {
+                              const selected = masterDesignations.find(d => d.en === e.target.value);
+                              setFormData({ ...formData, designationEn: e.target.value, designationHi: selected?.hi || e.target.value });
+                            }}
+                            className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--text)] font-medium appearance-none cursor-pointer"
+                          >
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="">{formLanguage === 'hi' ? 'पद चुनें' : 'Select designation'}</option>
+                            {isMasterLoading
+                              ? <option disabled>Loading...</option>
+                              : masterDesignations.length > 0
+                                ? masterDesignations.map((d, i) => (
+                                  <option className="bg-[var(--bg-surface)] text-[var(--text)]" key={i} value={d.en}>
+                                    {formLanguage === 'en' ? d.en : d.hi}
+                                  </option>
+                                ))
+                                : (
+                                  <>
+                                    <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="IAS Officer">IAS Officer</option>
+                                    <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="IPS Officer">IPS Officer</option>
+                                    <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Government Doctor">Government Doctor</option>
+                                    <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Software Engineer">Software Engineer</option>
+                                    <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Business Owner">Business Owner</option>
+                                    <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Not Working">Not Working</option>
+                                    <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Other">Other</option>
+                                  </>
+                                )
+                            }
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-[var(--text-dim)] absolute right-4 pointer-events-none" />
+                        </div>
+                      </div>
+
 
                       <FormStepInput
                         label="Work Location (English)"
@@ -1292,14 +1238,35 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                         onChange={(e: any) => setFormData({ ...formData, workLocationHi: e.target.value })}
                       />
 
-                      <FormStepInput
-                        label="Annual Income"
-                        icon={IndianRupee}
-                        type="number"
-                        placeholder="Enter your annual income"
-                        value={formData.annualIncome}
-                        onChange={(e: any) => setFormData({ ...formData, annualIncome: e.target.value.replace(/\D/g, '') })}
-                      />
+                      {/* Annual Income Dropdown from Firebase master_annual_income */}
+                      <div className="relative mt-3 mb-4">
+                        <div className="absolute -top-2 left-4 px-1 bg-[var(--bg-card)] text-[10px] text-[var(--text-muted)] z-10">
+                          Annual Income
+                        </div>
+                        <div className="flex items-center border border-[var(--border)] rounded-[1.5rem] p-2 bg-[var(--bg-surface)] focus-within:border-[#7c5cfc] transition-colors relative">
+                          <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-[rgba(232,86,106,0.15)] text-[#e8568a] mr-3">
+                            <IndianRupee className="w-5 h-5" />
+                          </div>
+                          <select
+                            value={formData.annualIncome}
+                            onChange={(e) => setFormData({ ...formData, annualIncome: e.target.value })}
+                            className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--text)] font-medium appearance-none cursor-pointer"
+                          >
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="">Select annual income</option>
+                            {isMasterLoading
+                              ? <option disabled>Loading...</option>
+                              : masterAnnualIncomes.length > 0
+                                ? masterAnnualIncomes.map((inc, i) => (
+                                  <option className="bg-[var(--bg-surface)] text-[var(--text)]" key={i} value={inc.en}>
+                                    {formLanguage === 'en' ? inc.en : inc.hi}
+                                  </option>
+                                ))
+                                : <option disabled>No data found</option>
+                            }
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-[var(--text-dim)] absolute right-4 pointer-events-none" />
+                        </div>
+                      </div>
                     </>
                   )}
 
@@ -1372,8 +1339,9 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                             className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--text)] font-medium appearance-none cursor-pointer"
                           >
                             <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="" disabled hidden>{formLanguage === 'hi' ? 'परिवार का प्रकार चुनें' : 'Select family type'}</option>
-                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Nuclear">{formLanguage === 'hi' ? 'एकल (Nuclear)' : 'Nuclear'}</option>
-                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Joint">{formLanguage === 'hi' ? 'संयुक्त (Joint)' : 'Joint'}</option>
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Joint Family">{formLanguage === 'hi' ? 'संयुक्त परिवार (Joint)' : 'Joint Family'}</option>
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Nuclear Family">{formLanguage === 'hi' ? 'एकल परिवार (Nuclear)' : 'Nuclear Family'}</option>
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Prefer not to say">{formLanguage === 'hi' ? 'कहना नहीं चाहते (Prefer not to say)' : 'Prefer not to say'}</option>
                           </select>
                           <ChevronDown className="w-4 h-4 text-[var(--text-dim)] absolute right-4 pointer-events-none" />
                         </div>
@@ -1394,9 +1362,11 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                             className="flex-1 bg-transparent border-none outline-none text-sm text-[var(--text)] font-medium appearance-none cursor-pointer"
                           >
                             <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="" disabled hidden>{formLanguage === 'hi' ? 'जीवनशैली चुनें' : 'Select lifestyle status'}</option>
-                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Middle Class">{formLanguage === 'hi' ? 'मध्यम वर्ग' : 'Middle Class'}</option>
-                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Upper Middle Class">{formLanguage === 'hi' ? 'उच्च मध्यम वर्ग' : 'Upper Middle Class'}</option>
-                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Rich">{formLanguage === 'hi' ? 'अमीर' : 'Rich'}</option>
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Prefer not to say">{formLanguage === 'hi' ? 'कहना नहीं चाहते' : 'Prefer not to say'}</option>
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Simple Lifestyle">{formLanguage === 'hi' ? 'सरल जीवनशैली' : 'Simple Lifestyle'}</option>
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Moderate Lifestyle">{formLanguage === 'hi' ? 'मध्यम जीवनशैली' : 'Moderate Lifestyle'}</option>
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Comfortable Lifestyle">{formLanguage === 'hi' ? 'आरामदायक जीवनशैली' : 'Comfortable Lifestyle'}</option>
+                            <option className="bg-[var(--bg-surface)] text-[var(--text)]" value="Well-established Lifestyle">{formLanguage === 'hi' ? 'सुस्थापित जीवनशैली' : 'Well-established Lifestyle'}</option>
                           </select>
                           <ChevronDown className="w-4 h-4 text-[var(--text-dim)] absolute right-4 pointer-events-none" />
                         </div>
@@ -1453,22 +1423,7 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                         </div>
                       </div>
 
-                      <FormStepInput
-                        label="Sub-Caste (English)"
-                        iconText="ABC"
-                        placeholder="Type in English to transliterate"
-                        value={formData.subCasteEn}
-                        onChange={(e: any) => setFormData({ ...formData, subCasteEn: e.target.value })}
-                      />
-                      <FormStepInput
-                        label="Sub-Caste (हिन्दी)"
-                        icon={UserPlus}
-                        placeholder="Enter sub-caste"
-                        value={formData.subCasteHi}
-                        isLoading={translatingFields.subCasteHi}
-                        hint={translatingFields.subCasteHi ? 'Translating...' : ''}
-                        onChange={(e: any) => setFormData({ ...formData, subCasteHi: e.target.value })}
-                      />
+
 
                       <div className="text-[#a32b36] font-semibold text-sm mb-4 mt-6 px-2 bg-[#a32b3615] py-2 rounded-lg inline-block w-full">
                         Add Known Languages
@@ -1656,38 +1611,47 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                   )}
 
                   {step === 8 && (
-                    <>
-                      <FormStepUpload
-                        label="Profile Image"
-                        file={formData.profileImage}
-                        onChange={(file: File) => setFormData({ ...formData, profileImage: file })}
-                      />
-                      <FormStepUpload
-                        label="Matrimony Image"
-                        file={formData.matrimonyImage}
-                        onChange={(file: File) => setFormData({ ...formData, matrimonyImage: file })}
-                      />
-                      <FormStepUpload
-                        label="Image with Agent"
-                        file={formData.agentImage}
-                        onChange={(file: File) => setFormData({ ...formData, agentImage: file })}
-                      />
-                      <FormStepUpload
-                        label="Gallery Images"
-                        file={formData.galleryImages}
-                        onChange={(file: File) => setFormData({ ...formData, galleryImages: file })}
-                      />
-                      <FormStepUpload
-                        label="Aadhar Document"
-                        file={formData.aadharDoc}
-                        onChange={(file: File) => setFormData({ ...formData, aadharDoc: file })}
-                      />
-                      <FormStepUpload
-                        label="Upload Biodata (Photo, PDF, or Document)"
-                        file={formData.biodataDoc}
-                        onChange={(file: File) => setFormData({ ...formData, biodataDoc: file })}
-                      />
-                     </>
+                    <div className="flex flex-col items-center justify-center py-8">
+                      <div className="relative mb-6">
+                        <div className="w-40 h-40 rounded-full border-4 border-white shadow-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                          {formData.profileImage ? (
+                            <img 
+                              src={URL.createObjectURL(formData.profileImage)} 
+                              alt="Profile Preview" 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : existingMediaUrls?.profileImage ? (
+                            <img 
+                              src={existingMediaUrls.profileImage} 
+                              alt="Existing Profile" 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <User className="w-20 h-20 text-gray-300" />
+                          )}
+                        </div>
+                        <label className="absolute bottom-2 right-2 w-12 h-12 bg-white rounded-full shadow-md flex items-center justify-center cursor-pointer border border-gray-200 hover:bg-gray-50 transition-colors">
+                          <Camera className="w-6 h-6 text-gray-600" />
+                          <input 
+                            type="file" 
+                            accept="image/*"
+                            className="hidden" 
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                setFormData({ ...formData, profileImage: e.target.files[0] });
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                      
+                      {formData.profileImage && (
+                        <div className="flex items-center text-green-600 bg-green-50 px-4 py-2 rounded-full font-medium text-sm">
+                          <CheckCircle className="w-5 h-5 mr-2" />
+                          Image uploaded successfully
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {step === 9 && (
@@ -1698,9 +1662,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                       <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 mb-3">
                         <h3 className="text-sm font-bold text-[#7c5cfc] mb-3 uppercase tracking-wider">🪪 Identity</h3>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                          <div><p className="text-[10px] text-[var(--text-muted)]">About Me (English)</p><p className="text-sm text-[var(--text)] font-medium truncate">{formData.aboutMeEn || '—'}</p></div>
-                          <div><p className="text-[10px] text-[var(--text-muted)]">About Me (Hindi)</p><p className="text-sm text-[var(--text)] font-medium truncate">{formData.aboutMeHi || '—'}</p></div>
-                          <div><p className="text-[10px] text-[var(--text-muted)]">Aadhar Number</p><p className="text-sm text-[var(--text)] font-medium">{formData.aadharNumber || '—'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">Date of Birth</p><p className="text-sm text-[var(--text)] font-medium">{formData.dob || '—'}</p></div>
                         </div>
                       </div>
@@ -1710,8 +1671,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                         <h3 className="text-sm font-bold text-[#7c5cfc] mb-3 uppercase tracking-wider">📍 Address</h3>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                           <div><p className="text-[10px] text-[var(--text-muted)]">Place</p><p className="text-sm text-[var(--text)] font-medium">{formData.placeEn || formData.placeHi || '—'}</p></div>
-                          <div><p className="text-[10px] text-[var(--text-muted)]">Post Office</p><p className="text-sm text-[var(--text)] font-medium">{formData.postEn || formData.postHi || '—'}</p></div>
-                          <div><p className="text-[10px] text-[var(--text-muted)]">Police Station</p><p className="text-sm text-[var(--text)] font-medium">{formData.policeStationEn || formData.policeStationHi || '—'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">State</p><p className="text-sm text-[var(--text)] font-medium">{formData.state || '—'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">District</p><p className="text-sm text-[var(--text)] font-medium">{formData.district || '—'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">PIN Code</p><p className="text-sm text-[var(--text)] font-medium">{formData.pinCode || '—'}</p></div>
@@ -1725,8 +1684,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                           <div><p className="text-[10px] text-[var(--text-muted)]">Literate</p><p className="text-sm text-[var(--text)] font-medium">{formData.isLiterate ? 'Yes' : 'No'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">College</p><p className="text-sm text-[var(--text)] font-medium truncate">{formData.collegeEn || formData.collegeHi || '—'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">Degree</p><p className="text-sm text-[var(--text)] font-medium">{formData.degreeEn || formData.degreeHi || '—'}</p></div>
-                          <div><p className="text-[10px] text-[var(--text-muted)]">Percentage</p><p className="text-sm text-[var(--text)] font-medium">{formData.percentage || '—'}</p></div>
-                          <div><p className="text-[10px] text-[var(--text-muted)]">Passing Year</p><p className="text-sm text-[var(--text)] font-medium">{formData.passingYear || '—'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">Extra Qualification</p><p className="text-sm text-[var(--text)] font-medium truncate">{formData.extraQualificationEn || formData.extraQualificationHi || '—'}</p></div>
                         </div>
                       </div>
@@ -1762,7 +1719,6 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                           <div><p className="text-[10px] text-[var(--text-muted)]">Religion</p><p className="text-sm text-[var(--text)] font-medium">{formData.religion || '—'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">Caste</p><p className="text-sm text-[var(--text)] font-medium">{formData.caste || '—'}</p></div>
-                          <div><p className="text-[10px] text-[var(--text-muted)]">Sub-Caste</p><p className="text-sm text-[var(--text)] font-medium">{formData.subCasteEn || formData.subCasteHi || '—'}</p></div>
                           <div><p className="text-[10px] text-[var(--text-muted)]">Language</p><p className="text-sm text-[var(--text)] font-medium">{formData.languageEn || formData.languageHi || '—'}</p></div>
                         </div>
                       </div>
@@ -1784,17 +1740,12 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                         <h3 className="text-sm font-bold text-[#7c5cfc] mb-3 uppercase tracking-wider">📁 Uploaded Documents</h3>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                           {[
-                            { label: 'Profile Image', file: formData.profileImage },
-                            { label: 'Matrimony Image', file: formData.matrimonyImage },
-                            { label: 'Image with Agent', file: formData.agentImage },
-                            { label: 'Gallery Images', file: formData.galleryImages },
-                            { label: 'Aadhar Document', file: formData.aadharDoc },
-                            { label: 'Biodata', file: formData.biodataDoc },
-                          ].map(({ label, file }) => (
+                            { label: 'Profile Image', file: formData.profileImage, existing: existingMediaUrls?.profileImage },
+                          ].map(({ label, file, existing }) => (
                             <div key={label}>
                               <p className="text-[10px] text-[var(--text-muted)]">{label}</p>
-                              <p className={`text-sm font-medium ${file ? 'text-green-400' : 'text-[var(--text-dim)]'}`}>
-                                {file ? `✓ ${(file as File).name.length > 16 ? (file as File).name.substring(0, 16) + '...' : (file as File).name}` : '— Not uploaded'}
+                              <p className={`text-sm font-medium ${file || existing ? 'text-green-400' : 'text-[var(--text-dim)]'}`}>
+                                {file ? `✓ ${(file as File).name.length > 16 ? (file as File).name.substring(0, 16) + '...' : (file as File).name}` : existing ? '✓ Uploaded' : '— Not uploaded'}
                               </p>
                             </div>
                           ))}
@@ -1825,6 +1776,15 @@ export function UserAddModal({ isOpen, onClose, onAdd, isAdding, editUser }: Use
                         className="w-1/3 bg-transparent border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text)] py-2 rounded-full font-semibold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Back
+                      </button>
+                    )}
+                    {step < 9 && (
+                      <button
+                        onClick={() => { setStepErrors([]); setStep(prev => prev + 1); }}
+                        disabled={isSubmitting}
+                        className="w-1/3 bg-transparent border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text)] py-2 rounded-full font-semibold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Skip
                       </button>
                     )}
                     <button

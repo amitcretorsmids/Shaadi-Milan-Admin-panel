@@ -16,6 +16,7 @@ import {
   getCountFromServer,
   setDoc,
   writeBatch,
+  or,
 } from 'firebase/firestore';
 import { db } from './firebase'; // Your firebase config
 
@@ -232,22 +233,40 @@ export const firebaseApi = {
       constraints.push(where('agentId', '==', filters.agentId));
     }
 
-    if (filters?.gender && filters.gender !== 'All') {
-      constraints.push(where('gender', '==', filters.gender.toLowerCase()));
-    }
-
     const q = constraints.length > 0 ? query(usersRef, ...constraints) : usersRef;
     const snapshot = await getDocs(q);
 
     let users = snapshot.docs.map(convertUser);
 
+    // Client-side filtering for gender (avoids Firebase index errors with case variations)
+    if (filters?.gender && filters.gender !== 'All') {
+      const gFilter = filters.gender.toLowerCase();
+      users = users.filter(u => {
+        const uGender = (typeof u.gender === 'string' ? u.gender : (u.gender as any)?.en || '').toLowerCase();
+        return uGender === gFilter;
+      });
+    }
+
     // Client-side filtering for fields not in Firebase
-    if (filters?.search) {
-      const s = filters.search.toLowerCase();
+    if (filters?.search?.trim()) {
+      const searchTerm = filters.search.toLowerCase().trim();
+
+      const safeString = (val: any) => {
+        if (!val) return '';
+        if (typeof val === 'string') return val.toLowerCase();
+        if (typeof val === 'object') {
+          const en = val.en || val.nameEn || '';
+          const hi = val.hi || val.nameHi || '';
+          return `${en} ${hi}`.toLowerCase();
+        }
+        return String(val).toLowerCase();
+      };
+
       users = users.filter(u =>
-        u.fullName.toLowerCase().includes(s) ||
-        u.phone.includes(s) ||
-        u.uid.toLowerCase().includes(s)
+        safeString(u.fullName).includes(searchTerm) ||
+        safeString(u.phone).includes(searchTerm) ||
+        safeString(u.uid).includes(searchTerm) ||
+        safeString(u.email).includes(searchTerm)
       );
     }
 
@@ -282,56 +301,64 @@ export const firebaseApi = {
         constraints.push(where("agentId", "==", filters.agentId));
       }
 
-      if (filters?.gender && filters.gender !== "All") {
-        constraints.push(where("gender", "==", filters.gender.toLowerCase()));
+      let finalUsers: OriginalUser[] = [];
+      let currentLastDoc: QueryDocumentSnapshot<DocumentData> | null = filters?.lastDoc || null;
+      let fetchedCount = 0;
+
+      while (finalUsers.length < pageSize && fetchedCount < 100) {
+        let currentConstraints = [...constraints];
+        
+        if (currentLastDoc) {
+          currentConstraints.push(startAfter(currentLastDoc));
+        }
+        currentConstraints.push(limit(pageSize));
+
+        const q = query(usersRef, ...currentConstraints);
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) break;
+
+        let batchUsers = snapshot.docs.map(convertUser);
+
+        // Client-side filtering for gender (handles both string and object cases without Firebase index errors)
+        if (filters?.gender && filters.gender !== 'All') {
+          const gFilter = filters.gender.toLowerCase();
+          batchUsers = batchUsers.filter(u => {
+            const uGender = (typeof u.gender === 'string' ? u.gender : (u.gender as any)?.en || '').toLowerCase();
+            return uGender === gFilter;
+          });
+        }
+
+        // Client-side search (for text search only)
+        if (filters?.search?.trim()) {
+          const searchTerm = filters.search.toLowerCase().trim();
+          const safeString = (val: any) => {
+            if (!val) return '';
+            if (typeof val === 'string') return val.toLowerCase();
+            if (typeof val === 'object') {
+              const en = val.en || val.nameEn || '';
+              const hi = val.hi || val.nameHi || '';
+              return `${en} ${hi}`.toLowerCase();
+            }
+            return String(val).toLowerCase();
+          };
+
+          batchUsers = batchUsers.filter((u) =>
+            safeString(u.fullName).includes(searchTerm) ||
+            safeString(u.phone).includes(searchTerm) ||
+            safeString(u.uid).includes(searchTerm) ||
+            safeString(u.email).includes(searchTerm)
+          );
+        }
+
+        finalUsers = [...finalUsers, ...batchUsers];
+        currentLastDoc = snapshot.docs[snapshot.docs.length - 1];
+        fetchedCount += snapshot.docs.length;
       }
-
-      // ✅ Pagination
-      if (filters?.lastDoc) {
-        // console.log("➡️ Using lastDoc for pagination:", filters.lastDoc.id);
-        constraints.push(startAfter(filters.lastDoc));
-      }
-
-      constraints.push(limit(pageSize));
-
-      // ✅ Build query
-      const q = query(usersRef, ...constraints);
-
-      // console.log("📡 Firestore Query Constraints:", constraints);
-
-      const snapshot = await getDocs(q);
-
-      // console.log("📊 Raw Docs Count:", snapshot.docs.length);
-
-      let users = snapshot.docs.map(convertUser);
-
-      // ✅ Client-side search
-      if (filters?.search?.trim()) {
-        const searchTerm = filters.search.toLowerCase().trim();
-
-        users = users.filter((u) =>
-          u.fullName?.toLowerCase().includes(searchTerm) ||
-          u.phone?.includes(searchTerm) ||
-          u.uid?.toLowerCase().includes(searchTerm) ||
-          u.email?.toLowerCase().includes(searchTerm)
-        );
-      }
-
-      // ✅ FIX: Always take lastDoc from snapshot (NOT based on filtered users)
-      const newLastDoc =
-        snapshot.docs.length > 0
-          ? snapshot.docs[snapshot.docs.length - 1]
-          : null;
-
-      // console.log("✅ Final Output:", {
-      //   returnedUsers: users.length,
-      //   nextPageAvailable: snapshot.docs.length === pageSize,
-      //   lastDocId: newLastDoc?.id || null,
-      // });
 
       return {
-        users,
-        lastDoc: newLastDoc,
+        users: finalUsers,
+        lastDoc: currentLastDoc,
       };
     } catch (error: any) {
       console.error("❌ Firestore Error:", error);
@@ -351,11 +378,11 @@ export const firebaseApi = {
     const totalSnap = await getCountFromServer(usersRef);
 
     const maleSnap = await getCountFromServer(
-      query(usersRef, where("gender", "==", "male"))
+      query(usersRef, where("gender", "in", ["male", "Male", "MALE"]))
     );
 
     const femaleSnap = await getCountFromServer(
-      query(usersRef, where("gender", "==", "female"))
+      query(usersRef, where("gender", "in", ["female", "Female", "FEMALE"]))
     );
 
     const profileSnap = await getCountFromServer(

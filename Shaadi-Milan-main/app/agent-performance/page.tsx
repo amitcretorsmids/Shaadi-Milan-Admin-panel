@@ -101,7 +101,7 @@ export default function AgentPerformancePage() {
                     <span className="text-xs w-8 flex-shrink-0">{a.conversionRate}%</span>
                   </div>
                 </Td>
-                <Td className="text-[#ffc84a] font-medium">₹{a.totalRevenue.toLocaleString()}</Td>
+                <Td className="text-[#ffc84a] font-medium">₹{(a.totalRevenue || 0).toLocaleString()}</Td>
                 <Td><Badge variant={a.status === 'Active' ? 'success' : 'warning'}>{a.status}</Badge></Td>
               </Tr>
             ))}

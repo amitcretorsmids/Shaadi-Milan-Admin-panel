@@ -305,7 +305,7 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
               <div className="flex items-center gap-2">
                 <Badge variant="info">
                   Active Filters: 
-                  {gender !== 'All' && ` ${gender}`}
+                  {gender !== 'All' && <span className="capitalize"> {gender}</span>}
                   {agentId !== 'All' && ` • Specific Agent`}
                   {search && ` • "${search}"`}
                 </Badge>
@@ -354,8 +354,8 @@ const { data: stats, isLoading: statsLoading } = useUsersStats();
                       />
                       <div>
                         <div className="font-medium text-[var(--text)]">{getString(u.fullName) || '—'}</div>
-                        <Badge variant={getString(u.gender) === 'male' ? 'male' : getString(u.gender) === 'female' ? 'female' : 'neutral'}>
-                          {getString(u.gender) || 'Not specified'}
+                        <Badge variant={getString(u.gender).toLowerCase() === 'male' ? 'male' : getString(u.gender).toLowerCase() === 'female' ? 'female' : 'neutral'}>
+                          <span className="capitalize">{getString(u.gender) || 'Not specified'}</span>
                         </Badge>
                       </div>
                     </div>
