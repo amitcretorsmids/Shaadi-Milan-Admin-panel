@@ -75,7 +75,7 @@ const getAgentStatus = (agent: OriginalAgent) => {
   return 'Pending';
 };
 
-export type AgentsResponse = {
+type AgentsResponse = {
   agents: OriginalAgent[];
   lastDoc: QueryDocumentSnapshot<DocumentData> | null;
 };
