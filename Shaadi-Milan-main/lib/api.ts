@@ -155,14 +155,57 @@ export const firebaseApi = {
 
       const authResult = await authResponse.json();
 
+      let uid: string;
+
       if (!authResponse.ok || authResult.error) {
-        const errorMsg = authResult.error?.message || 'Failed to create Firebase Auth account';
-        console.error('❌ Firebase Auth creation failed:', authResult.error);
-        throw new Error(errorMsg);
+        const errorCode = authResult.error?.message || '';
+
+        if (errorCode === 'EMAIL_EXISTS') {
+          // ─── Email already exists in Firebase Auth ───────────────────────────
+          // Try to sign in with the given credentials to get the UID
+          const signInResponse = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: data.agentEmail,
+                password: data.tempPassword,
+                returnSecureToken: false,
+              }),
+            }
+          );
+
+          const signInResult = await signInResponse.json();
+
+          if (!signInResponse.ok || signInResult.error) {
+            // Email exists but password doesn't match — inform user clearly
+            throw new Error(
+              `This email (${data.agentEmail}) is already registered in Firebase. ` +
+              `Please use a different email address to create a new agent.`
+            );
+          }
+
+          uid = signInResult.localId;
+          console.warn('⚠️ Email already existed in Auth, reusing UID:', uid);
+
+          // Check if Firestore agent doc already exists for this UID
+          const existingSnap = await getDocs(query(collection(db, 'agents'), where('uid', '==', uid), limit(1)));
+          if (!existingSnap.empty) {
+            throw new Error(
+              `An agent with email (${data.agentEmail}) already exists. Please use a different email address.`
+            );
+          }
+        } else {
+          const errorMsg = authResult.error?.message || 'Failed to create Firebase Auth account';
+          console.error('❌ Firebase Auth creation failed:', authResult.error);
+          throw new Error(errorMsg);
+        }
+      } else {
+        uid = authResult.localId; // The Firebase Auth UID
       }
 
-      const uid = authResult.localId; // The Firebase Auth UID
-      console.log('✅ Firebase Auth user created:', uid);
+      console.log('✅ Firebase Auth user created/reused:', uid);
 
       // ─── Step 2: Generate unique agentId ──────────────────────────────────
       const generateUniqueAgentId = async (): Promise<string> => {
@@ -204,6 +247,7 @@ export const firebaseApi = {
         isApproved: data.isApproved ?? false,
         isRejected: data.isRejected ?? false,
         registrationDate: data.registrationDate || new Date().toISOString(),
+        createdAt: Timestamp.now(), // ✅ Added for reporting/analytics queries
         tempPassword: data.tempPassword, // Store so admin can share it with agent
       };
 
@@ -374,27 +418,473 @@ export const firebaseApi = {
   },
   getUsersStats: async () => {
     const usersRef = collection(db, "users");
+    const snap = await getDocs(usersRef);
+    
+    let total = 0;
+    let male = 0;
+    let female = 0;
+    let profileCreated = 0;
 
-    const totalSnap = await getCountFromServer(usersRef);
+    // Helper to extract string if field is multilingual object e.g. { en: "Male" }
+    const extractString = (val: any): string => {
+      if (!val) return '';
+      if (typeof val === 'string') return val;
+      if (typeof val === 'object') {
+        if (typeof val.en === 'string') return val.en;
+        if (typeof val.hi === 'string') return val.hi;
+        const first = Object.values(val).find(v => typeof v === 'string');
+        return (first as string) || '';
+      }
+      return String(val);
+    };
 
-    const maleSnap = await getCountFromServer(
-      query(usersRef, where("gender", "in", ["male", "Male", "MALE"]))
-    );
-
-    const femaleSnap = await getCountFromServer(
-      query(usersRef, where("gender", "in", ["female", "Female", "FEMALE"]))
-    );
-
-    const profileSnap = await getCountFromServer(
-      query(usersRef, where("isProfileCreated", "==", true))
-    );
+    snap.forEach(doc => {
+      total++;
+      const data = doc.data();
+      
+      const rawGender = extractString(data.gender);
+      const g = rawGender.toLowerCase().trim();
+      
+      if (g === 'male' || g === 'm') male++;
+      else if (g === 'female' || g === 'f') female++;
+      
+      if (data.isProfileCreated) profileCreated++;
+    });
 
     return {
-      total: totalSnap.data().count,
-      male: maleSnap.data().count,
-      female: femaleSnap.data().count,
-      profileCreated: profileSnap.data().count,
+      total,
+      male,
+      female,
+      profileCreated,
     };
+  },
+
+  // ─── Monthly Reports Real Stats ───────────────────────────────────────────────
+  // Returns Fixed Male/Female, Registrations (Male/Female/Agent), and Total Marriages
+  // for a given date range. Uses getCountFromServer for scale, falls back to
+  // client-side tallying where composite indexes aren't available.
+  getMonthlyReportsStats: async (startDate: Date, endDate: Date) => {
+    const usersRef = collection(db, 'users');
+    const agentsRef = collection(db, 'agents');
+    const marriagesRef = collection(db, 'marriages');
+
+    const startTs = Timestamp.fromDate(startDate);
+    const endTs = Timestamp.fromDate(endDate);
+
+    // Helper: normalize gender from string or multilingual object
+    const extractGender = (val: any): string => {
+      if (!val) return '';
+      if (typeof val === 'string') return val.toLowerCase().trim();
+      if (typeof val === 'object') {
+        const str = val.en || val.hi || Object.values(val).find((v: any) => typeof v === 'string') || '';
+        return (str as string).toLowerCase().trim();
+      }
+      return String(val).toLowerCase().trim();
+    };
+
+    // ── Fetch users in date range (for registrations + fixed counts) ──────────
+    // We fetch docs (not just count) because we need to filter by gender+status
+    // For 50K+ scale, replace with a /stats collection maintained by Cloud Functions
+    const usersInRangeSnap = await getDocs(
+      query(usersRef, where('createdAt', '>=', startTs), where('createdAt', '<=', endTs))
+    );
+
+    let maleRegistrations = 0;
+    let femaleRegistrations = 0;
+    let fixedMale = 0;
+    let fixedFemale = 0;
+
+    usersInRangeSnap.forEach(docSnap => {
+      const data = docSnap.data();
+      const g = extractGender(data.gender);
+      const statusRaw = (data.status || data.profileStatus || '').toString().toLowerCase().trim();
+
+      if (g === 'male' || g === 'm') {
+        maleRegistrations++;
+        if (statusRaw === 'fixed') fixedMale++;
+      } else if (g === 'female' || g === 'f') {
+        femaleRegistrations++;
+        if (statusRaw === 'fixed') fixedFemale++;
+      }
+    });
+
+    // ── Agent registrations in date range ─────────────────────────────────────
+    // Agents may have 'createdAt' (Timestamp, new) OR 'registrationDate' (string, old).
+    // We fetch all agents and filter client-side to handle both formats.
+    let agentRegistrations = 0;
+    try {
+      const agentSnap = await getDocs(agentsRef);
+      agentSnap.forEach(d => {
+        const agentData = d.data();
+        let agentDate: Date | null = null;
+
+        // Try createdAt (Timestamp) first
+        if (agentData.createdAt?.toDate) {
+          agentDate = agentData.createdAt.toDate();
+        } else if (agentData.registrationDate) {
+          // Fallback: registrationDate is an ISO string
+          if (agentData.registrationDate.seconds) {
+            agentDate = new Date(agentData.registrationDate.seconds * 1000);
+          } else {
+            agentDate = new Date(agentData.registrationDate);
+          }
+        }
+
+        if (agentDate && agentDate >= startDate && agentDate <= endDate) {
+          agentRegistrations++;
+        }
+      });
+    } catch {
+      agentRegistrations = 0;
+    }
+
+    // ── Total Marriages in date range ─────────────────────────────────────────
+    let totalMarriages = 0;
+    try {
+      const marriageCountSnap = await getCountFromServer(
+        query(marriagesRef, where('createdAt', '>=', startTs), where('createdAt', '<=', endTs))
+      );
+      totalMarriages = marriageCountSnap.data().count;
+    } catch {
+      totalMarriages = 0;
+    }
+
+    return {
+      fixedMale,
+      fixedFemale,
+      maleRegistrations,
+      femaleRegistrations,
+      agentRegistrations,
+      totalMarriages,
+    };
+  },
+
+
+  // Returns bucketed real registration data for the bar chart.
+  // period: 'Daily' → hourly buckets, 'Weekly' → daily buckets,
+  //         'Monthly' → monthly buckets (full year), 'Custom' → daily buckets
+  getRegistrationChartData: async (period: string, startDate: Date, endDate: Date) => {
+    const usersRef  = collection(db, 'users');
+    const agentsRef = collection(db, 'agents');
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    const extractGender = (val: any): string => {
+      if (!val) return '';
+      if (typeof val === 'string') return val.toLowerCase().trim();
+      if (typeof val === 'object') {
+        const str = val.en || val.hi || Object.values(val).find((v: any) => typeof v === 'string') || '';
+        return (str as string).toLowerCase().trim();
+      }
+      return String(val).toLowerCase().trim();
+    };
+
+    // Agents may have Timestamp 'createdAt' (new) OR string 'registrationDate' (old)
+    const getAgentDate = (data: any): Date | null => {
+      if (data.createdAt?.toDate) return data.createdAt.toDate();
+      if (data.registrationDate) {
+        if (data.registrationDate.seconds) return new Date(data.registrationDate.seconds * 1000);
+        const d = new Date(data.registrationDate);
+        if (!isNaN(d.getTime())) return d;
+      }
+      return null;
+    };
+
+    // ── MONTHLY: show all 12 months of current year ──────────────────────────
+    if (period === 'Monthly') {
+      const yearStart = new Date(new Date().getFullYear(), 0, 1, 0, 0, 0, 0);
+      const yearEnd   = new Date(new Date().getFullYear(), 11, 31, 23, 59, 59, 999);
+
+      const [usersSnap, agentsSnap] = await Promise.all([
+        getDocs(query(usersRef,  where('createdAt', '>=', Timestamp.fromDate(yearStart)), where('createdAt', '<=', Timestamp.fromDate(yearEnd)))),
+        getDocs(agentsRef), // Fetch all agents — filter by date client-side (handles both field types)
+      ]);
+
+      const MONTHS   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const maleArr   = new Array(12).fill(0);
+      const femaleArr = new Array(12).fill(0);
+      const agentArr  = new Array(12).fill(0);
+
+      usersSnap.forEach(d => {
+        const data = d.data();
+        const ts = data.createdAt?.toDate?.();
+        if (!ts) return;
+        const m = ts.getMonth();
+        const g = extractGender(data.gender);
+        if (g === 'male' || g === 'm') maleArr[m]++;
+        else if (g === 'female' || g === 'f') femaleArr[m]++;
+      });
+
+      agentsSnap.forEach(d => {
+        const ts = getAgentDate(d.data());
+        if (!ts || ts < yearStart || ts > yearEnd) return;
+        agentArr[ts.getMonth()]++;
+      });
+
+      return MONTHS.map((month, i) => ({ month, male: maleArr[i], female: femaleArr[i], agent: agentArr[i] }));
+    }
+
+    // ── WEEKLY: last 7 days, bucket by day ────────────────────────────────────
+    if (period === 'Weekly') {
+      const now = new Date();
+      const labels: string[] = [];
+      const dates: Date[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        d.setHours(0, 0, 0, 0);
+        dates.push(d);
+        labels.push(d.toLocaleDateString('en', { weekday: 'short' }) + ' ' + d.getDate());
+      }
+      const weekStart = dates[0];
+      const weekEnd   = new Date(now); weekEnd.setHours(23, 59, 59, 999);
+
+      const [usersSnap, agentsSnap] = await Promise.all([
+        getDocs(query(usersRef, where('createdAt', '>=', Timestamp.fromDate(weekStart)), where('createdAt', '<=', Timestamp.fromDate(weekEnd)))),
+        getDocs(agentsRef),
+      ]);
+
+      const maleArr   = new Array(7).fill(0);
+      const femaleArr = new Array(7).fill(0);
+      const agentArr  = new Array(7).fill(0);
+
+      const getDayIdx = (ts: Date) => {
+        for (let i = 0; i < 7; i++) {
+          if (ts >= dates[i] && ts < new Date(dates[i].getTime() + 86400000)) return i;
+        }
+        return -1;
+      };
+
+      usersSnap.forEach(d => {
+        const data = d.data();
+        const ts = data.createdAt?.toDate?.();
+        if (!ts) return;
+        const idx = getDayIdx(ts);
+        if (idx < 0) return;
+        const g = extractGender(data.gender);
+        if (g === 'male' || g === 'm') maleArr[idx]++;
+        else if (g === 'female' || g === 'f') femaleArr[idx]++;
+      });
+
+      agentsSnap.forEach(d => {
+        const ts = getAgentDate(d.data());
+        if (!ts) return;
+        const idx = getDayIdx(ts);
+        if (idx >= 0) agentArr[idx]++;
+      });
+
+      return labels.map((month, i) => ({ month, male: maleArr[i], female: femaleArr[i], agent: agentArr[i] }));
+    }
+
+    // ── DAILY: today, bucket by hour ──────────────────────────────────────────
+    if (period === 'Daily') {
+      const today    = new Date();
+      const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+      const dayEnd   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+
+      const [usersSnap, agentsSnap] = await Promise.all([
+        getDocs(query(usersRef, where('createdAt', '>=', Timestamp.fromDate(dayStart)), where('createdAt', '<=', Timestamp.fromDate(dayEnd)))),
+        getDocs(agentsRef),
+      ]);
+
+      const maleArr   = new Array(24).fill(0);
+      const femaleArr = new Array(24).fill(0);
+      const agentArr  = new Array(24).fill(0);
+
+      usersSnap.forEach(d => {
+        const data = d.data();
+        const ts = data.createdAt?.toDate?.();
+        if (!ts) return;
+        const g = extractGender(data.gender);
+        if (g === 'male' || g === 'm') maleArr[ts.getHours()]++;
+        else if (g === 'female' || g === 'f') femaleArr[ts.getHours()]++;
+      });
+
+      agentsSnap.forEach(d => {
+        const ts = getAgentDate(d.data());
+        if (!ts || ts < dayStart || ts > dayEnd) return;
+        agentArr[ts.getHours()]++;
+      });
+
+      const labels = Array.from({ length: 24 }, (_, h) => `${h}:00`);
+      return labels.map((month, i) => ({ month, male: maleArr[i], female: femaleArr[i], agent: agentArr[i] }));
+    }
+
+    // ── CUSTOM: bucket by day within date range ────────────────────────────────
+    const msPerDay  = 86400000;
+    const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / msPerDay) + 1);
+    const labels    = Array.from({ length: totalDays }, (_, i) => {
+      const d = new Date(startDate.getTime() + i * msPerDay);
+      return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    });
+
+    const [usersSnap, agentsSnap] = await Promise.all([
+      getDocs(query(usersRef, where('createdAt', '>=', Timestamp.fromDate(startDate)), where('createdAt', '<=', Timestamp.fromDate(endDate)))),
+      getDocs(agentsRef),
+    ]);
+
+    const maleArr   = new Array(totalDays).fill(0);
+    const femaleArr = new Array(totalDays).fill(0);
+    const agentArr  = new Array(totalDays).fill(0);
+
+    usersSnap.forEach(d => {
+      const data = d.data();
+      const ts = data.createdAt?.toDate?.();
+      if (!ts) return;
+      const idx = Math.floor((ts.getTime() - startDate.getTime()) / msPerDay);
+      if (idx < 0 || idx >= totalDays) return;
+      const g = extractGender(data.gender);
+      if (g === 'male' || g === 'm') maleArr[idx]++;
+      else if (g === 'female' || g === 'f') femaleArr[idx]++;
+    });
+
+    agentsSnap.forEach(d => {
+      const ts = getAgentDate(d.data());
+      if (!ts || ts < startDate || ts > endDate) return;
+      const idx = Math.floor((ts.getTime() - startDate.getTime()) / msPerDay);
+      if (idx >= 0 && idx < totalDays) agentArr[idx]++;
+    });
+
+    return labels.map((month, i) => ({ month, male: maleArr[i], female: femaleArr[i], agent: agentArr[i] }));
+  },
+
+  // ─── Fixed Relationships Chart Real Data ──────────────────────────────────
+  // Returns bucketed real fixed data for the area chart.
+  getFixedChartData: async (period: string, startDate: Date, endDate: Date) => {
+    const usersRef = collection(db, 'users');
+
+    const extractGender = (val: any): string => {
+      if (!val) return '';
+      if (typeof val === 'string') return val.toLowerCase().trim();
+      if (typeof val === 'object') {
+        const str = val.en || val.hi || Object.values(val).find((v: any) => typeof v === 'string') || '';
+        return (str as string).toLowerCase().trim();
+      }
+      return String(val).toLowerCase().trim();
+    };
+
+    const isFixed = (data: any): boolean => {
+      const statusRaw = (data.status || data.profileStatus || '').toString().toLowerCase().trim();
+      return statusRaw === 'fixed';
+    };
+
+    // ── MONTHLY
+    if (period === 'Monthly') {
+      const yearStart = new Date(new Date().getFullYear(), 0, 1, 0, 0, 0, 0);
+      const yearEnd   = new Date(new Date().getFullYear(), 11, 31, 23, 59, 59, 999);
+
+      const usersSnap = await getDocs(query(usersRef, where('createdAt', '>=', Timestamp.fromDate(yearStart)), where('createdAt', '<=', Timestamp.fromDate(yearEnd))));
+
+      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const maleArr  = new Array(12).fill(0);
+      const femaleArr = new Array(12).fill(0);
+
+      usersSnap.forEach(d => {
+        const data = d.data();
+        if (!isFixed(data)) return;
+        const ts = data.createdAt?.toDate?.();
+        if (!ts) return;
+        const m = ts.getMonth();
+        const g = extractGender(data.gender);
+        if (g === 'male' || g === 'm') maleArr[m]++;
+        else if (g === 'female' || g === 'f') femaleArr[m]++;
+      });
+
+      return MONTHS.map((month, i) => ({ month, maleFixed: maleArr[i], femaleFixed: femaleArr[i] }));
+    }
+
+    // ── WEEKLY
+    if (period === 'Weekly') {
+      const now = new Date();
+      const labels: string[] = [];
+      const dates: Date[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        d.setHours(0, 0, 0, 0);
+        dates.push(d);
+        labels.push(d.toLocaleDateString('en', { weekday: 'short' }) + ' ' + d.getDate());
+      }
+      const weekStart = dates[0];
+      const weekEnd   = new Date(now); weekEnd.setHours(23, 59, 59, 999);
+
+      const usersSnap = await getDocs(query(usersRef, where('createdAt', '>=', Timestamp.fromDate(weekStart)), where('createdAt', '<=', Timestamp.fromDate(weekEnd))));
+
+      const maleArr   = new Array(7).fill(0);
+      const femaleArr = new Array(7).fill(0);
+
+      const getDayIdx = (ts: Date) => {
+        for (let i = 0; i < 7; i++) {
+          if (ts >= dates[i] && ts < new Date(dates[i].getTime() + 86400000)) return i;
+        }
+        return -1;
+      };
+
+      usersSnap.forEach(d => {
+        const data = d.data();
+        if (!isFixed(data)) return;
+        const ts = data.createdAt?.toDate?.();
+        if (!ts) return;
+        const idx = getDayIdx(ts);
+        if (idx < 0) return;
+        const g = extractGender(data.gender);
+        if (g === 'male' || g === 'm') maleArr[idx]++;
+        else if (g === 'female' || g === 'f') femaleArr[idx]++;
+      });
+
+      return labels.map((month, i) => ({ month, maleFixed: maleArr[i], femaleFixed: femaleArr[i] }));
+    }
+
+    // ── DAILY
+    if (period === 'Daily') {
+      const today    = new Date();
+      const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+      const dayEnd   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+
+      const usersSnap = await getDocs(query(usersRef, where('createdAt', '>=', Timestamp.fromDate(dayStart)), where('createdAt', '<=', Timestamp.fromDate(dayEnd))));
+
+      const maleArr   = new Array(24).fill(0);
+      const femaleArr = new Array(24).fill(0);
+
+      usersSnap.forEach(d => {
+        const data = d.data();
+        if (!isFixed(data)) return;
+        const ts = data.createdAt?.toDate?.();
+        if (!ts) return;
+        const g = extractGender(data.gender);
+        if (g === 'male' || g === 'm') maleArr[ts.getHours()]++;
+        else if (g === 'female' || g === 'f') femaleArr[ts.getHours()]++;
+      });
+
+      const labels = Array.from({ length: 24 }, (_, h) => `${h}:00`);
+      return labels.map((month, i) => ({ month, maleFixed: maleArr[i], femaleFixed: femaleArr[i] }));
+    }
+
+    // ── CUSTOM
+    const msPerDay  = 86400000;
+    const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / msPerDay) + 1);
+    const labels    = Array.from({ length: totalDays }, (_, i) => {
+      const d = new Date(startDate.getTime() + i * msPerDay);
+      return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    });
+
+    const usersSnap = await getDocs(query(usersRef, where('createdAt', '>=', Timestamp.fromDate(startDate)), where('createdAt', '<=', Timestamp.fromDate(endDate))));
+
+    const maleArr   = new Array(totalDays).fill(0);
+    const femaleArr = new Array(totalDays).fill(0);
+
+    usersSnap.forEach(d => {
+      const data = d.data();
+      if (!isFixed(data)) return;
+      const ts = data.createdAt?.toDate?.();
+      if (!ts) return;
+      const idx = Math.floor((ts.getTime() - startDate.getTime()) / msPerDay);
+      if (idx < 0 || idx >= totalDays) return;
+      const g = extractGender(data.gender);
+      if (g === 'male' || g === 'm') maleArr[idx]++;
+      else if (g === 'female' || g === 'f') femaleArr[idx]++;
+    });
+
+    return labels.map((month, i) => ({ month, maleFixed: maleArr[i], femaleFixed: femaleArr[i] }));
   },
 
   getUser: async (uid: string): Promise<OriginalUser | null> => {
@@ -1052,10 +1542,308 @@ export const firebaseApi = {
     }
   },
 
+  // ─── Registration Report (Real Firebase Data) ─────────────────────────────
+  getRegistrationReport: async ({
+    period,
+    customFrom,
+    customTo,
+  }: {
+    period: 'Daily' | 'Weekly' | 'Monthly' | 'Custom';
+    customFrom?: Date;
+    customTo?: Date;
+  }): Promise<{
+    labels: string[];
+    maleData: number[];
+    femaleData: number[];
+    agentData: number[];
+    totalMale: number;
+    totalFemale: number;
+    totalAgent: number;
+  }> => {
+    const now = new Date();
 
+    // ── Compute date range ──────────────────────────────────────────────────
+    let fromDate: Date;
+    let toDate: Date = new Date(now);
+    toDate.setHours(23, 59, 59, 999);
 
+    if (period === 'Daily') {
+      fromDate = new Date(now);
+      fromDate.setHours(0, 0, 0, 0);
+    } else if (period === 'Weekly') {
+      fromDate = new Date(now);
+      fromDate.setDate(now.getDate() - 6);
+      fromDate.setHours(0, 0, 0, 0);
+    } else if (period === 'Monthly') {
+      fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else {
+      // Custom
+      fromDate = customFrom ? new Date(customFrom) : new Date(now.getFullYear(), now.getMonth(), 1);
+      toDate = customTo ? new Date(customTo) : toDate;
+      toDate.setHours(23, 59, 59, 999);
+    }
+
+    const fromTs = Timestamp.fromDate(fromDate);
+    const toTs = Timestamp.fromDate(toDate);
+
+    // ── Fetch users in range ────────────────────────────────────────────────
+    const usersSnap = await getDocs(
+      query(
+        collection(db, 'users'),
+        where('createdAt', '>=', fromTs),
+        where('createdAt', '<=', toTs),
+        orderBy('createdAt', 'asc')
+      )
+    );
+
+    // ── Fetch agents in range ───────────────────────────────────────────────
+    const agentsSnap = await getDocs(
+      query(
+        collection(db, 'agents'),
+        where('createdAt', '>=', fromTs),
+        where('createdAt', '<=', toTs),
+        orderBy('createdAt', 'asc')
+      )
+    );
+
+    // ── Build bucket labels ─────────────────────────────────────────────────
+    const diffMs = toDate.getTime() - fromDate.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    let labels: string[] = [];
+    let bucketFn: (d: Date) => string;
+
+    if (period === 'Daily') {
+      // Hourly buckets: 0-23
+      labels = Array.from({ length: 24 }, (_, h) => `${h}:00`);
+      bucketFn = (d) => `${d.getHours()}:00`;
+    } else if (period === 'Weekly' || (period === 'Custom' && diffDays <= 14)) {
+      // Daily buckets
+      const cur = new Date(fromDate);
+      while (cur <= toDate) {
+        labels.push(cur.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
+        cur.setDate(cur.getDate() + 1);
+      }
+      bucketFn = (d) => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    } else if (period === 'Monthly' || (period === 'Custom' && diffDays <= 90)) {
+      // Daily buckets for month
+      const cur = new Date(fromDate);
+      while (cur <= toDate) {
+        labels.push(cur.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
+        cur.setDate(cur.getDate() + 1);
+      }
+      bucketFn = (d) => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    } else {
+      // Monthly buckets for large ranges
+      const cur = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+      while (cur <= toDate) {
+        labels.push(cur.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }));
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      bucketFn = (d) => d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+    }
+
+    // ── Zero-initialize buckets ─────────────────────────────────────────────
+    const maleMap: Record<string, number> = {};
+    const femaleMap: Record<string, number> = {};
+    const agentMap: Record<string, number> = {};
+    labels.forEach((l) => { maleMap[l] = 0; femaleMap[l] = 0; agentMap[l] = 0; });
+
+    // ── Populate user buckets ───────────────────────────────────────────────
+    usersSnap.docs.forEach((d) => {
+      const data = d.data();
+      const ts: Timestamp | undefined = data.createdAt;
+      if (!ts) return;
+      const date = ts instanceof Timestamp ? ts.toDate() : new Date(ts);
+      const key = bucketFn(date);
+      if (!(key in maleMap)) return;
+      const gender = (data.gender || '').toLowerCase();
+      if (gender === 'male' || gender === 'm') maleMap[key] = (maleMap[key] || 0) + 1;
+      else femaleMap[key] = (femaleMap[key] || 0) + 1;
+    });
+
+    // ── Populate agent buckets ──────────────────────────────────────────────
+    agentsSnap.docs.forEach((d) => {
+      const data = d.data();
+      const ts: Timestamp | undefined = data.createdAt;
+      if (!ts) return;
+      const date = ts instanceof Timestamp ? ts.toDate() : new Date(ts);
+      const key = bucketFn(date);
+      if (!(key in agentMap)) return;
+      agentMap[key] = (agentMap[key] || 0) + 1;
+    });
+
+    const maleData = labels.map((l) => maleMap[l] || 0);
+    const femaleData = labels.map((l) => femaleMap[l] || 0);
+    const agentData = labels.map((l) => agentMap[l] || 0);
+
+    return {
+      labels,
+      maleData,
+      femaleData,
+      agentData,
+      totalMale: maleData.reduce((a, b) => a + b, 0),
+      totalFemale: femaleData.reduce((a, b) => a + b, 0),
+      totalAgent: agentData.reduce((a, b) => a + b, 0),
+    };
+  },
+
+  // ─── Dashboard Stats (Real Data) ───────────────────────────────────────────
+  getDashboardStats: async (): Promise<DashboardStats> => {
+    const usersRef = collection(db, 'users');
+    const agentsRef = collection(db, 'agents');
+    const marriagesRef = collection(db, 'marriages');
+
+    const extractGender = (val: any): string => {
+      if (!val) return '';
+      if (typeof val === 'string') return val.toLowerCase().trim();
+      if (typeof val === 'object') {
+        const str = val.en || val.hi || Object.values(val).find((v: any) => typeof v === 'string') || '';
+        return (str as string).toLowerCase().trim();
+      }
+      return String(val).toLowerCase().trim();
+    };
+
+    // Parallel fetch for speed
+    const [usersSnap, agentsSnap, marriagesCountSnap] = await Promise.all([
+      getDocs(usersRef),
+      getDocs(agentsRef),
+      getCountFromServer(marriagesRef).catch(() => ({ data: () => ({ count: 0 }) }))
+    ]);
+
+    let totalRegistrations = 0;
+    let maleFixed = 0;
+    let femaleFixed = 0;
+    let maleMarried = 0;
+    let femaleMarried = 0;
+    let pendingApprovals = 0;
+
+    usersSnap.forEach(doc => {
+      const data = doc.data();
+      totalRegistrations++;
+
+      const g = extractGender(data.gender);
+      const isMale = g === 'male' || g === 'm';
+      const isFemale = g === 'female' || g === 'f';
+      
+      const statusRaw = (data.status || data.profileStatus || '').toString().toLowerCase().trim();
+
+      if (statusRaw === 'fixed') {
+        if (isMale) maleFixed++;
+        else if (isFemale) femaleFixed++;
+      } else if (statusRaw === 'married') {
+        if (isMale) maleMarried++;
+        else if (isFemale) femaleMarried++;
+      } else if (statusRaw === 'pending') {
+        pendingApprovals++;
+      }
+    });
+
+    let totalAgents = 0;
+    let activeAgents = 0;
+
+    agentsSnap.forEach(doc => {
+      const data = doc.data();
+      totalAgents++;
+      if (data.isApproved || data.status?.toLowerCase() === 'active') {
+        activeAgents++;
+      }
+    });
+
+    return {
+      totalRegistrations,
+      maleFixed,
+      femaleFixed,
+      maleMarried,
+      femaleMarried,
+      totalAgents,
+      activeAgents,
+      pendingApprovals,
+      monthlyRevenue: 0, // Not required right now
+      registrationGrowth: 0, // Dummy growth for now since all-time
+      fixedGrowth: 0,
+      marriageGrowth: 0,
+    };
+  },
+
+  // ─── Agent Performance (Real Data) ─────────────────────────────────────────
+  getAgentPerformanceStats: async (startDate: Date, endDate: Date): Promise<any[]> => {
+    const agentsRef = collection(db, 'agents');
+    const usersRef = collection(db, 'users');
+    const paymentsRef = collection(db, 'payments');
+
+    const startTs = Timestamp.fromDate(startDate);
+    const endTs = Timestamp.fromDate(endDate);
+
+    // Fetch all agents (small enough for admin panel)
+    const agentsSnap = await getDocs(agentsRef);
+    const agentsMap = new Map<string, any>();
+
+    agentsSnap.forEach(doc => {
+      const data = doc.data();
+      agentsMap.set(doc.id, {
+        id: doc.id,
+        agentId: data.agentId || doc.id,
+        agentName: data.agentName || 'Unknown Agent',
+        agentMobile: data.agentMobile || '',
+        agentEmail: data.agentEmail || '',
+        agentState: data.agentState || '',
+        agentCity: data.agentCity || '',
+        status: data.isApproved ? 'Active' : 'Pending',
+        usersAdded: 0,
+        usersPaid: 0,
+        totalRevenue: 0,
+        conversionRate: 0,
+      });
+      // Fallback matching by custom agentId string
+      if (data.agentId && data.agentId !== doc.id) {
+        agentsMap.set(data.agentId, agentsMap.get(doc.id));
+      }
+    });
+
+    // Fetch users in date range
+    const usersQuery = query(usersRef, where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
+    const usersSnap = await getDocs(usersQuery);
+    
+    usersSnap.forEach(doc => {
+      const data = doc.data();
+      const aId = data.agentId;
+      if (aId && agentsMap.has(aId)) {
+        agentsMap.get(aId).usersAdded++;
+      }
+    });
+
+    // Fetch payments in date range
+    const paymentsQuery = query(paymentsRef, where('createdAt', '>=', startTs), where('createdAt', '<=', endTs));
+    const paymentsSnap = await getDocs(paymentsQuery);
+
+    paymentsSnap.forEach(doc => {
+      const data = doc.data();
+      const aId = data.agentId;
+      if (aId && agentsMap.has(aId) && data.status === 'Paid') {
+        agentsMap.get(aId).usersPaid++;
+        agentsMap.get(aId).totalRevenue += (data.amount || 0);
+      }
+    });
+
+    // Convert map to array (unique agents by doc.id) and calculate conversion rates
+    const uniqueAgents = Array.from(new Set(Array.from(agentsMap.values())));
+    
+    uniqueAgents.forEach(a => {
+      if (a.usersAdded > 0) {
+        a.conversionRate = Math.round((a.usersPaid / a.usersAdded) * 100);
+      }
+    });
+
+    // Sort by conversion rate descending, then users added
+    uniqueAgents.sort((a, b) => b.conversionRate - a.conversionRate || b.usersAdded - a.usersAdded);
+
+    return uniqueAgents;
+  },
 
 }
+
+
 
 
 

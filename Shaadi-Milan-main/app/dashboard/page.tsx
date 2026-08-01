@@ -1,11 +1,18 @@
 'use client';
-import { useDashboard, useMonthlyData } from '@/hooks/use-queries';
+import { useDashboard, useRegistrationChartData, useFixedChartData } from '@/hooks/use-queries';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import { StatCard, Card, CardHeader, Skeleton } from '@/components/ui';
 import { RegistrationBarChart, FixedAreaChart, DonutChart } from '@/components/charts';
 
 export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useDashboard();
-  const { data: monthly, isLoading: monthlyLoading } = useMonthlyData('Monthly');
+  
+  // Real Firestore data for Registration Trends
+  const { data: regChartData = [], isLoading: regChartLoading } = useRegistrationChartData('Monthly');
+  
+  // Real Firestore data for Fixed Relationships Trend
+  const { data: fixedChartData = [], isLoading: fixedChartLoading } = useFixedChartData('Monthly');
 
   const pieData = [
     { name: 'Male', value: stats?.totalRegistrations ? 1842 : 0 },
@@ -42,7 +49,7 @@ export default function DashboardPage() {
         <Card className="xl:col-span-2">
           <CardHeader title="Registration Trends" subtitle="Male vs Female vs Agent registrations by month" />
           <div className="p-5">
-            {monthlyLoading ? <Skeleton className="h-56" /> : <RegistrationBarChart data={monthly!} />}
+            {regChartLoading ? <Skeleton className="h-56" /> : <RegistrationBarChart data={regChartData} />}
           </div>
         </Card>
         <Card>
@@ -58,7 +65,7 @@ export default function DashboardPage() {
         <Card className="xl:col-span-2">
           <CardHeader title="Fixed Relationships Trend" subtitle="Male vs Female fixed per month" />
           <div className="p-5">
-            {monthlyLoading ? <Skeleton className="h-52" /> : <FixedAreaChart data={monthly!} />}
+            {fixedChartLoading ? <Skeleton className="h-52" /> : <FixedAreaChart data={fixedChartData} />}
           </div>
         </Card>
         <Card>

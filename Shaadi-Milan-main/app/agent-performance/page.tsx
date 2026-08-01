@@ -1,12 +1,12 @@
 'use client';
 import { useState } from 'react';
-import { useAgents } from '@/hooks/use-queries';
+import { useAgentPerformance } from '@/hooks/use-queries';
 import { Card, CardHeader, FilterBar, Button, Table, Tr, Td, Skeleton, Badge, ProgressBar, Avatar } from '@/components/ui';
 import { ConversionBarChart } from '@/components/charts';
 
 export default function AgentPerformancePage() {
   const [period, setPeriod] = useState('Monthly');
-  const { data: agents, isLoading } = useAgents();
+  const { data: agents, isLoading } = useAgentPerformance(period);
 
   const chartData = (agents || []).map(a => ({
     name: (a.name || (a as any).agentName || 'Unknown').split(' ')[0],

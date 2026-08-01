@@ -125,12 +125,17 @@ export function Button({ variant = 'ghost', size = 'md', loading, children, clas
 export function FilterBar({
   value,
   onChange,
-  options = ['Weekly', 'Monthly', 'Custom'],
+  options = ['Daily', 'Weekly', 'Monthly', 'Custom'],
 }: {
   value: string;
   onChange: (v: string) => void;
   options?: string[];
 }) {
+  const DISPLAY_LABELS: Record<string, string> = {
+    'Daily': 'Today',
+    'Monthly': 'This month'
+  };
+
   return (
     <div className="flex gap-1 bg-[var(--bg-surface)] rounded-lg p-0.5">
       {options.map(opt => (
@@ -143,7 +148,7 @@ export function FilterBar({
               : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
-          {opt}
+          {DISPLAY_LABELS[opt] || opt}
         </button>
       ))}
     </div>

@@ -42,7 +42,9 @@ export const QUERY_KEYS = {
 export function useDashboard() {
   return useQuery({
     queryKey: QUERY_KEYS.dashboard,
-    queryFn: api.getDashboardStats,
+    queryFn: firebaseApi.getDashboardStats,
+    staleTime: 0,
+    refetchInterval: 30000, // Update every 30s
   });
 }
 
@@ -356,13 +358,33 @@ export function useAllNotifications(filters?: {
     initialPageParam: null,
   });
 }
-// ─── Monthly Data ─────────────────────────────────────────────────────────────
-export function useMonthlyData(period: string) {
+// ─── Monthly Data (Real Firestore) ───────────────────────────────────────────
+// useMonthlyData is now defined later in this file alongside its date helpers.
+
+// ─── Real Registration Report ─────────────────────────────────────────────────
+export function useRegistrationReport({
+  period,
+  customFrom,
+  customTo,
+}: {
+  period: 'Daily' | 'Weekly' | 'Monthly' | 'Custom';
+  customFrom?: Date | null;
+  customTo?: Date | null;
+}) {
   return useQuery({
-    queryKey: QUERY_KEYS.monthly(period),
-    queryFn: () => api.getMonthlyData(period),
+    queryKey: ['registration-report', period, customFrom?.toISOString(), customTo?.toISOString()],
+    queryFn: () =>
+      firebaseApi.getRegistrationReport({
+        period,
+        customFrom: customFrom ?? undefined,
+        customTo: customTo ?? undefined,
+      }),
+    // Don't run Custom until both dates are set
+    enabled: period !== 'Custom' || (!!customFrom && !!customTo),
+    staleTime: 1000 * 60 * 2, // 2 min cache
   });
 }
+
 
 // ─── Weekly Data ──────────────────────────────────────────────────────────────
 export function useWeeklyData() {
@@ -478,3 +500,136 @@ export function useNotifications() {
 //     },
 //   });
 // }
+
+// ─── Date Range Helpers ───────────────────────────────────────────────────────
+function getTodayRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  return { start, end };
+}
+
+function getWeeklyRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(now.getDate() - 6); // last 7 days
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function getMonthlyRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { start, end };
+}
+
+// ─── Monthly Reports Real Data Hook ──────────────────────────────────────────
+export function useMonthlyData(
+  period: string,
+  customFrom?: Date | null,
+  customTo?: Date | null
+) {
+  const range = (() => {
+    if (period === 'Daily') return getTodayRange();
+    if (period === 'Weekly') return getWeeklyRange();
+    if (period === 'Custom' && customFrom && customTo) return { start: customFrom, end: customTo };
+    return getMonthlyRange();
+  })();
+
+  const enabled = period !== 'Custom' || (!!customFrom && !!customTo);
+
+  return useQuery({
+    queryKey: ['monthly-reports-stats', period, customFrom?.toISOString(), customTo?.toISOString()],
+    queryFn: () => firebaseApi.getMonthlyReportsStats(range.start, range.end),
+    enabled,
+    staleTime: 0,           // Always consider data stale so refetch runs
+    refetchInterval: 30000, // Auto-refresh every 30s → picks up new registrations
+    placeholderData: {
+      fixedMale: 0,
+      fixedFemale: 0,
+      maleRegistrations: 0,
+      femaleRegistrations: 0,
+      agentRegistrations: 0,
+      totalMarriages: 0,
+    },
+  });
+}
+
+// ─── Real Registration Chart Data Hook ───────────────────────────────────────
+// Returns real Firestore data bucketed for the RegistrationBarChart.
+export function useRegistrationChartData(
+  period: string,
+  customFrom?: Date | null,
+  customTo?: Date | null
+) {
+  const range = (() => {
+    if (period === 'Daily') return getTodayRange();
+    if (period === 'Weekly') return getWeeklyRange();
+    if (period === 'Custom' && customFrom && customTo) return { start: customFrom, end: customTo };
+    return getMonthlyRange();
+  })();
+
+  const enabled = period !== 'Custom' || (!!customFrom && !!customTo);
+
+  return useQuery({
+    queryKey: ['registration-chart-data', period, customFrom?.toISOString(), customTo?.toISOString()],
+    queryFn: () => firebaseApi.getRegistrationChartData(period, range.start, range.end),
+    enabled,
+    staleTime: 0,
+    refetchInterval: 30000, // Auto-refresh every 30s
+    placeholderData: [],
+  });
+}
+
+// ─── Real Fixed Relationships Chart Data Hook ───────────────────────────────
+export function useFixedChartData(
+  period: string,
+  customFrom?: Date | null,
+  customTo?: Date | null
+) {
+  const range = (() => {
+    if (period === 'Daily') return getTodayRange();
+    if (period === 'Weekly') return getWeeklyRange();
+    if (period === 'Custom' && customFrom && customTo) return { start: customFrom, end: customTo };
+    return getMonthlyRange();
+  })();
+
+  const enabled = period !== 'Custom' || (!!customFrom && !!customTo);
+
+  return useQuery({
+    queryKey: ['fixed-chart-data', period, customFrom?.toISOString(), customTo?.toISOString()],
+    queryFn: () => firebaseApi.getFixedChartData(period, range.start, range.end),
+    enabled,
+    staleTime: 0,
+    refetchInterval: 30000,
+    placeholderData: [],
+  });
+}
+
+// ─── Agent Performance Hook (Real Data) ─────────────────────────────────────
+export function useAgentPerformance(
+  period: string,
+  customFrom?: Date | null,
+  customTo?: Date | null
+) {
+  const range = (() => {
+    if (period === 'Daily') return getTodayRange();
+    if (period === 'Weekly') return getWeeklyRange();
+    if (period === 'Custom' && customFrom && customTo) return { start: customFrom, end: customTo };
+    return getMonthlyRange();
+  })();
+
+  const enabled = period !== 'Custom' || (!!customFrom && !!customTo);
+
+  return useQuery({
+    queryKey: ['agent-performance', period, customFrom?.toISOString(), customTo?.toISOString()],
+    queryFn: () => firebaseApi.getAgentPerformanceStats(range.start, range.end),
+    enabled,
+    staleTime: 0,
+    refetchInterval: 30000, // Update every 30s
+    placeholderData: [],
+  });
+}

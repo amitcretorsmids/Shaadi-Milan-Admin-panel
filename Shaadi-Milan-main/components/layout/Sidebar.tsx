@@ -14,7 +14,6 @@ const NAV_SECTIONS = [
     label: 'Reports',
     items: [
       { href: '/monthly-reports', label: 'Monthly Reports', icon: '📅' },
-      { href: '/weekly-reports', label: 'Weekly Reports', icon: '📆' },
       { href: '/agent-performance', label: 'Agent Performance', icon: '🏆' },
     ],
   },
